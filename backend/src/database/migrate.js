@@ -138,6 +138,17 @@ async function migrate() {
     `);
 
     await client.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS linkedin_id VARCHAR(255);
+    `);
+
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_linkedin_id_unique
+      ON users(linkedin_id)
+      WHERE linkedin_id IS NOT NULL;
+    `);
+
+    await client.query(`
       ALTER TABLE generated_content
         ADD COLUMN IF NOT EXISTS external_post_id TEXT,
         ADD COLUMN IF NOT EXISTS export_payload JSONB DEFAULT '{}'::jsonb,

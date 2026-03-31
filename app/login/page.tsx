@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
-import { ArrowRight, Chrome, Loader2, Sparkles } from "lucide-react";
+import { ArrowRight, Chrome, Linkedin, Loader2, Sparkles } from "lucide-react";
 
 import { PortfolioMark } from "@/components/brand/portfolio-mark";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -39,6 +39,10 @@ export default function LoginPage() {
 
   function continueWithGoogle() {
     window.location.href = `${API_URL}/api/auth/google?redirectTo=/dashboard`;
+  }
+
+  function continueWithLinkedIn() {
+    window.location.href = `${API_URL}/api/auth/linkedin?redirectTo=/dashboard`;
   }
 
   return (
@@ -104,6 +108,14 @@ export default function LoginPage() {
                 >
                   <Chrome className="h-4 w-4" />
                   Continue with Google
+                </button>
+                <button
+                  type="button"
+                  onClick={continueWithLinkedIn}
+                  className={buttonStyles({ variant: "outline", className: "w-full" })}
+                >
+                  <Linkedin className="h-4 w-4" />
+                  Continue with LinkedIn
                 </button>
               </div>
             </form>

@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -26,6 +27,7 @@ app.use(
 app.use(express.json({ limit: "4mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 app.get("/health", (_, res) => {
   res.json({

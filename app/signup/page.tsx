@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
-import { ArrowRight, Chrome, Loader2, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Chrome, Linkedin, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 
 import { PortfolioMark } from "@/components/brand/portfolio-mark";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -45,6 +45,10 @@ export default function SignupPage() {
 
   function continueWithGoogle() {
     window.location.href = `${API_URL}/api/auth/google?redirectTo=/dashboard`;
+  }
+
+  function continueWithLinkedIn() {
+    window.location.href = `${API_URL}/api/auth/linkedin?redirectTo=/dashboard`;
   }
 
   function continueWithDemo() {
@@ -160,6 +164,14 @@ export default function SignupPage() {
                   <Chrome className="h-4 w-4" />
                   Continue with Google
                 </button>
+                <button
+                  type="button"
+                  onClick={continueWithLinkedIn}
+                  className={buttonStyles({ variant: "outline", className: "w-full" })}
+                >
+                  <Linkedin className="h-4 w-4" />
+                  Continue with LinkedIn
+                </button>
               </div>
             </form>
 
@@ -167,8 +179,9 @@ export default function SignupPage() {
               <div className="flex items-start gap-3">
                 <ShieldCheck className="mt-0.5 h-5 w-5 text-tide-700" />
                 <p className="text-sm leading-7 text-muted-foreground">
-                  Google login is available for sign-in, but the app still routes new users into
-                  onboarding immediately after account creation.
+                  Google and LinkedIn sign-in both route new users into onboarding immediately
+                  after account creation, so the setup still feels guided instead of dropping
+                  people into an empty dashboard.
                 </p>
               </div>
               <p className="mt-3 text-sm leading-7 text-muted-foreground">

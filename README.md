@@ -76,20 +76,31 @@ Core backend variables:
 
 - `PORT`
 - `FRONTEND_URL`
+- `DATABASE_URL`
 - `DB_HOST`
 - `DB_PORT`
 - `DB_NAME`
 - `DB_USER`
 - `DB_PASS`
+- `DB_SSL`
 - `JWT_SECRET`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_CALLBACK_URL`
 - `LINKEDIN_CLIENT_ID`
 - `LINKEDIN_CLIENT_SECRET`
+- `LINKEDIN_AUTH_REDIRECT_URI`
+- `LINKEDIN_REDIRECT_URI`
 - `DRIBBBLE_CLIENT_ID`
 - `DRIBBBLE_CLIENT_SECRET`
+- `DRIBBBLE_REDIRECT_URI`
+- `BLOB_READ_WRITE_TOKEN`
 - `AI_SERVICE_URL`
 - `AI_API_KEY`
+
+Supabase note:
+
+- For Render or other IPv4-only environments, use the Supabase Session Pooler connection string for `DATABASE_URL` instead of the direct `db.<project-ref>.supabase.co:5432` host.
 
 ## API Surface
 
@@ -129,6 +140,13 @@ The Vercel deployment is best used for the frontend experience. For full live au
 NEXT_PUBLIC_API_URL=https://your-backend-url
 ```
 
+Recommended production wiring:
+
+- Frontend on Vercel
+- Backend on Render
+- PostgreSQL on Supabase via `DATABASE_URL`
+- File uploads on Vercel Blob via `BLOB_READ_WRITE_TOKEN`
+
 Without a hosted backend, the public deploy still supports the demo path and seeded product walkthrough.
 
 ## Repository Layout
@@ -147,4 +165,3 @@ docs/                   Supporting docs and runbooks
 - Backend boots locally with a health endpoint
 - Public repo documentation is ready
 - Frontend release can be deployed on Vercel
-

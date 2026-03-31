@@ -2,16 +2,24 @@ const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const multer = require("multer");
+const { put } = require("@vercel/blob");
 const { v4: uuidv4 } = require("uuid");
 
 const { pool } = require("../database/config");
 const { authenticateToken } = require("../middleware/auth");
 const { generatePortfolioDraft } = require("../services/ai");
+const { isPlaceholderValue } = require("../utils/config");
 
 const uploadDir = path.join(__dirname, "..", "..", "uploads");
 fs.mkdirSync(uploadDir, { recursive: true });
 
-const upload = multer({ dest: uploadDir });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 25 * 1024 * 1024,
+    files: 10
+  }
+});
 const router = express.Router();
 
 function parseJsonArray(value) {
@@ -39,6 +47,58 @@ function slugify(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function sanitizeFileName(value) {
+  return String(value || "asset")
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function isBlobConfigured() {
+  return (
+    !!process.env.BLOB_READ_WRITE_TOKEN &&
+    !isPlaceholderValue(process.env.BLOB_READ_WRITE_TOKEN)
+  );
+}
+
+async function storeProjectAsset({ file, userId, projectId, index }) {
+  const safeName = sanitizeFileName(file.originalname || `asset-${index + 1}`);
+  const fileKey = `${Date.now()}-${index + 1}-${safeName}`;
+
+  if (isBlobConfigured()) {
+    const blob = await put(`projects/${userId}/${projectId}/${fileKey}`, file.buffer, {
+      access: "public",
+      addRandomSuffix: true,
+      contentType: file.mimetype,
+      token: process.env.BLOB_READ_WRITE_TOKEN
+    });
+
+    return {
+      storage: "blob",
+      originalName: file.originalname,
+      pathname: blob.pathname,
+      url: blob.url,
+      downloadUrl: blob.downloadUrl,
+      mimetype: file.mimetype,
+      size: file.size
+    };
+  }
+
+  const localFileName = `${projectId}-${fileKey}`;
+  const localPath = path.join(uploadDir, localFileName);
+  await fs.promises.writeFile(localPath, file.buffer);
+
+  return {
+    storage: "local",
+    originalName: file.originalname,
+    path: `/uploads/${localFileName}`,
+    url: `/uploads/${localFileName}`,
+    mimetype: file.mimetype,
+    size: file.size
+  };
 }
 
 async function getOwnedProject(projectId, userId) {
@@ -148,13 +208,6 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
     return res.status(400).json({ error: "Project title is required" });
   }
 
-  const assetPaths = (req.files || []).map((file) => ({
-    originalName: file.originalname,
-    path: file.path.replace(/\\/g, "/"),
-    mimetype: file.mimetype,
-    size: file.size
-  }));
-
   const client = await pool.connect();
 
   try {
@@ -177,7 +230,7 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
          assets_url,
          testimonials
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'structuring', $8, $9, $10, $11, $12, $13)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'structuring', $8, $9, $10, $11, '[]'::jsonb, $12)
        RETURNING *`,
       [
         req.user.userId,
@@ -191,12 +244,31 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
         solution || null,
         results || null,
         JSON.stringify(parseJsonArray(deliverables)),
-        JSON.stringify(assetPaths),
         JSON.stringify(parseJsonArray(testimonials))
       ]
     );
 
-    const project = projectResult.rows[0];
+    const storedAssets = await Promise.all(
+      (req.files || []).map((file, index) =>
+        storeProjectAsset({
+          file,
+          userId: req.user.userId,
+          projectId: projectResult.rows[0].id,
+          index
+        })
+      )
+    );
+
+    const assetResult = await client.query(
+      `UPDATE projects
+       SET assets_url = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING *`,
+      [JSON.stringify(storedAssets), projectResult.rows[0].id]
+    );
+
+    const project = assetResult.rows[0];
     const portfolioDraft = await generatePortfolioDraft(project);
     const publicSlug = `${slugify(title)}-${uuidv4().slice(0, 8)}`;
 

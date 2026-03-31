@@ -2,6 +2,7 @@ const PLACEHOLDER_TOKENS = [
   "",
   "placeholder",
   "your_password",
+  "your_database_url",
   "your_openai_key",
   "your_google_client_id",
   "your_google_client_secret",
@@ -24,6 +25,10 @@ function isPlaceholderValue(value) {
   }
 
   if (PLACEHOLDER_TOKENS.includes(normalized)) {
+    return true;
+  }
+
+  if (normalized.includes("[your-password]")) {
     return true;
   }
 

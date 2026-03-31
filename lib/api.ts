@@ -1,5 +1,8 @@
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
+  configuredApiUrl ||
+  (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000");
 
 export class ApiError extends Error {
   status: number;
