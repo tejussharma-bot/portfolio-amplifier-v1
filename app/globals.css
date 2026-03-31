@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 42 100% 98%;
+    --foreground: 212 25% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 212 25% 18%;
+    --border: 34 35% 88%;
+    --input: 34 35% 88%;
+    --muted: 40 45% 95%;
+    --muted-foreground: 214 12% 43%;
+    --primary: 16 91% 56%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 166 40% 93%;
+    --secondary-foreground: 176 43% 24%;
+    --accent: 40 88% 58%;
+    --accent-foreground: 212 25% 18%;
+    --ring: 16 91% 56%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background font-body text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at top left, rgba(245, 93, 41, 0.1), transparent 28%),
+      radial-gradient(circle at top right, rgba(43, 157, 146, 0.08), transparent 24%),
+      linear-gradient(180deg, #fff8ef 0%, #fffdf8 52%, #f3fbf9 100%);
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-3xl border border-white/70 bg-white/80 shadow-panel backdrop-blur;
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full border border-coral-200 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-coral-700;
+  }
+
+  .kicker {
+    @apply text-sm font-semibold uppercase tracking-[0.22em] text-muted-foreground;
+  }
+
+  .grid-fade {
+    background-image:
+      linear-gradient(rgba(31, 41, 51, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(31, 41, 51, 0.05) 1px, transparent 1px);
+    background-position: center;
+    background-size: 34px 34px;
+  }
+
+  .dark-panel {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 28px;
+    box-shadow: 0 30px 90px -50px rgba(0, 0, 0, 0.95);
+    backdrop-filter: blur(24px);
+  }
+
+  .dark-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    padding: 0.5rem 1rem;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  .dark-kicker {
+    color: rgba(255, 255, 255, 0.48);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  .dark-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-position: center;
+    background-size: 34px 34px;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(93, 113, 130, 0.22);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

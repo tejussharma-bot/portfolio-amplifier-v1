@@ -1,0 +1,307 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  ExternalLink,
+  Link2,
+  Loader2,
+  RefreshCw,
+  ShieldCheck
+} from "lucide-react";
+
+import { useAuth } from "@/components/providers/auth-provider";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Badge } from "@/components/ui/badge";
+import { buttonStyles } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  fetchBehanceExportTemplate,
+  fetchChannelStatus,
+  fetchConnectUrl
+} from "@/lib/api";
+import { channelConnections } from "@/lib/workflow-data";
+import { mergeChannelState } from "@/lib/view-models";
+
+export default function ChannelsPage() {
+  const { token, isAuthenticated } = useAuth();
+  const [channels, setChannels] = useState(channelConnections);
+  const [behanceTemplate, setBehanceTemplate] = useState<any>(null);
+  const [loadingPlatform, setLoadingPlatform] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadChannels() {
+      if (!token || !isAuthenticated) {
+        return;
+      }
+
+      try {
+        const [channelResult, behanceResult] = await Promise.all([
+          fetchChannelStatus(token),
+          fetchBehanceExportTemplate(token)
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        setChannels(mergeChannelState(channelResult.channels));
+        setBehanceTemplate(behanceResult);
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+      }
+    }
+
+    void loadChannels();
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, token]);
+
+  async function handleConnect(platform: "linkedin" | "dribbble") {
+    if (!token || !isAuthenticated) {
+      return;
+    }
+
+    setLoadingPlatform(platform);
+
+    try {
+      const result = await fetchConnectUrl(token, platform);
+      window.location.href = result.url;
+    } finally {
+      setLoadingPlatform(null);
+    }
+  }
+
+  async function handleBehanceTemplate() {
+    if (!token || !isAuthenticated) {
+      return;
+    }
+
+    setLoadingPlatform("behance");
+
+    try {
+      const result = behanceTemplate || (await fetchBehanceExportTemplate(token));
+      setBehanceTemplate(result);
+      await navigator.clipboard.writeText(
+        `${result.template.title}\n\n${result.template.intro}\n\n${result.template.sections.join("\n")}`
+      );
+    } finally {
+      setLoadingPlatform(null);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Channels"
+        title="Connection hub for direct publish and guided export"
+        description="Keep channel state honest in V1: show what is connected, what needs a reconnect, and where export mode is the right fallback."
+        badge={isAuthenticated ? "live workspace" : "demo mode"}
+        actions={
+          <Link href="/dashboard/publish-studio" className={buttonStyles({ size: "md" })}>
+            Open Publish Studio
+          </Link>
+        }
+      />
+
+      <section className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Channel states</CardTitle>
+            <CardDescription>
+              Connection status, permissions, and fallback mode should stay visible to the user.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {channels.map((channel) => (
+              <div key={channel.id} className="rounded-3xl border border-border bg-white/85 p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-display text-2xl font-semibold">{channel.name}</h3>
+                      <Badge
+                        variant={
+                          channel.status === "Connected"
+                            ? "success"
+                            : channel.status === "Needs reconnect"
+                              ? "warning"
+                              : "info"
+                        }
+                      >
+                        {channel.status}
+                      </Badge>
+                    </div>
+                    <p className="text-sm leading-7 text-muted-foreground">{channel.description}</p>
+                  </div>
+                  <div className="rounded-3xl bg-muted/70 p-4 text-sm sm:min-w-[240px]">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Last sync</span>
+                      <span className="font-semibold">{channel.lastSync}</span>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-4">
+                      <span className="text-muted-foreground">Fallback</span>
+                      <span className="text-right font-semibold">{channel.fallback}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-[0.88fr_1.12fr]">
+                  <div className="rounded-3xl bg-coral-50/60 p-4">
+                    <p className="text-sm font-semibold">Permissions / mode</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {channel.permissions.map((item) => (
+                        <Badge key={item} variant="outline">
+                          {item}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-3xl bg-white/90 p-4">
+                    <p className="text-sm font-semibold">Guided checklist</p>
+                    <div className="mt-3 space-y-3">
+                      {channel.checklist.map((item) => (
+                        <div key={item} className="flex gap-3 rounded-2xl bg-muted/70 px-4 py-3">
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-tide-700" />
+                          <p className="text-sm leading-6">{item}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  {channel.id === "linkedin" || channel.id === "dribbble" ? (
+                    <button
+                      className={buttonStyles({ size: "sm" })}
+                      onClick={() => handleConnect(channel.id as "linkedin" | "dribbble")}
+                      disabled={loadingPlatform === channel.id || !isAuthenticated}
+                    >
+                      {loadingPlatform === channel.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : channel.status === "Connected" ? (
+                        <Link2 className="h-4 w-4" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                      {channel.status === "Connected" ? "Manage connection" : "Reconnect account"}
+                    </button>
+                  ) : (
+                    <button
+                      className={buttonStyles({ size: "sm" })}
+                      onClick={handleBehanceTemplate}
+                      disabled={loadingPlatform === "behance" || !isAuthenticated}
+                    >
+                      {loadingPlatform === "behance" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ExternalLink className="h-4 w-4" />
+                      )}
+                      Copy export template
+                    </button>
+                  )}
+                  <Link
+                    href="/dashboard/settings"
+                    className={buttonStyles({ variant: "outline", size: "sm" })}
+                  >
+                    View settings
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6">
+          <Card className="bg-ink-900 text-white">
+            <CardHeader>
+              <CardTitle className="text-white">No account yet?</CardTitle>
+              <CardDescription className="text-white/72">
+                V1 should guide setup honestly instead of pretending account creation is automated.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                "Explain why the platform matters for the current project type.",
+                "List what the user needs before they click out to create the account.",
+                "Provide a return path once the account exists."
+              ].map((item) => (
+                <div key={item} className="rounded-2xl bg-white/10 px-4 py-3 text-sm leading-6 text-white/84">
+                  {item}
+                </div>
+              ))}
+              <div className="rounded-3xl bg-white/10 p-5">
+                <p className="text-sm font-semibold text-white">Suggested setup prompt</p>
+                <p className="mt-3 text-sm leading-7 text-white/72">
+                  Create the account, confirm the profile is public, then return here to connect or
+                  continue in export mode.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Channel risk notes</CardTitle>
+              <CardDescription>
+                These keep the product inside the MVP boundary without overpromising.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                {
+                  icon: ShieldCheck,
+                  title: "Behance stays export-first",
+                  body: "The UI should frame this as a deliberate V1 choice because Adobe access is inconsistent for new public integrations."
+                },
+                {
+                  icon: RefreshCw,
+                  title: "Reconnect states matter",
+                  body: "Users need to know when OAuth is stale before they reach the final publish step."
+                },
+                {
+                  icon: ArrowRight,
+                  title: "Publish Studio remains the final step",
+                  body: "Connection state belongs here, but the actual publishing decision should still happen in Publish Studio."
+                }
+              ].map((item) => (
+                <div key={item.title} className="rounded-3xl bg-muted/70 p-5">
+                  <item.icon className="h-5 w-5 text-coral-600" />
+                  <h3 className="mt-4 font-display text-xl font-semibold">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-7 text-muted-foreground">{item.body}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {behanceTemplate ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Behance export mode</CardTitle>
+                <CardDescription>
+                  The backend provides a manual publish template so V1 still works without enterprise API access.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm leading-7 text-muted-foreground">{behanceTemplate.message}</p>
+                <div className="rounded-3xl bg-muted/70 p-5">
+                  <p className="text-sm font-semibold">{behanceTemplate.template.title}</p>
+                  <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                    {behanceTemplate.template.intro}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  );
+}

@@ -1,0 +1,223 @@
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:3000";
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status = 500) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+type RequestOptions = RequestInit & {
+  token?: string | null;
+};
+
+async function parseResponse(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  return response.text();
+}
+
+export async function apiRequest<T>(
+  path: string,
+  { token, headers, ...init }: RequestOptions = {}
+): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(headers || {})
+    }
+  });
+
+  const body = await parseResponse(response);
+
+  if (!response.ok) {
+    const message =
+      typeof body === "object" && body && "error" in body
+        ? String(body.error)
+        : response.statusText;
+    throw new ApiError(message, response.status);
+  }
+
+  return body as T;
+}
+
+export interface SessionUser {
+  id: number;
+  email: string;
+  fullName?: string | null;
+  accountType?: string | null;
+  professionalRole?: string | null;
+  role?: string | null;
+  brandVoice?: string | null;
+  website?: string | null;
+  industry?: string | null;
+}
+
+export async function registerUser(payload: {
+  email: string;
+  password: string;
+  full_name?: string;
+}) {
+  return apiRequest<{ user: SessionUser; token: string }>("/api/auth/register", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function loginUser(payload: { email: string; password: string }) {
+  return apiRequest<{ user: SessionUser; token: string }>("/api/auth/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchCurrentUser(token: string) {
+  return apiRequest<{ user: SessionUser }>("/api/auth/me", { token });
+}
+
+export async function saveOnboarding(
+  token: string,
+  payload: Record<string, unknown>
+) {
+  return apiRequest<{ message: string; nextStep: string }>("/api/auth/onboarding", {
+    method: "POST",
+    token,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchProjects(token: string) {
+  return apiRequest<{ projects: any[] }>("/api/projects", { token });
+}
+
+export async function fetchProjectDetail(token: string, projectId: string) {
+  return apiRequest<{ project: any; drafts: any[]; analysis: any | null }>(
+    `/api/projects/${projectId}`,
+    { token }
+  );
+}
+
+export async function createProject(token: string, formData: FormData) {
+  return apiRequest<{ project: any; portfolioDraft: any }>("/api/projects", {
+    method: "POST",
+    token,
+    body: formData
+  });
+}
+
+export async function savePortfolio(
+  token: string,
+  projectId: string,
+  payload: { contentJson: unknown; isPublished?: boolean }
+) {
+  return apiRequest<{ portfolio: any }>(`/api/projects/${projectId}/portfolio`, {
+    method: "PUT",
+    token,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function analyzeProject(
+  token: string,
+  projectId: string,
+  payload: { objective: string; tone: string }
+) {
+  return apiRequest<any>(`/api/amplify/${projectId}/analyze`, {
+    method: "POST",
+    token,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function generateContent(
+  token: string,
+  payload: {
+    projectId: string;
+    platform: string;
+    tone: string;
+    objective: string;
+    contentType?: string;
+  }
+) {
+  return apiRequest<any>("/api/amplify/generate-content", {
+    method: "POST",
+    token,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchReviews(token: string) {
+  return apiRequest<{ summary: any; reviews: any[] }>("/api/orm", { token });
+}
+
+export async function generateReviewDraft(
+  token: string,
+  reviewId: string,
+  tone: string
+) {
+  return apiRequest<{ draft: string }>(`/api/orm/${reviewId}/respond`, {
+    method: "POST",
+    token,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ tone })
+  });
+}
+
+export async function approveReviewDraft(
+  token: string,
+  reviewId: string,
+  responseDraft: string
+) {
+  return apiRequest<{ message: string; responseDraft: string }>(
+    `/api/orm/${reviewId}/approve`,
+    {
+      method: "POST",
+      token,
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ responseDraft })
+    }
+  );
+}
+
+export async function fetchChannelStatus(token: string) {
+  return apiRequest<{ channels: any[] }>("/api/channels/status", { token });
+}
+
+export async function fetchConnectUrl(token: string, platform: "linkedin" | "dribbble") {
+  return apiRequest<{ url: string }>(`/api/channels/${platform}/connect-url`, { token });
+}
+
+export async function fetchBehanceExportTemplate(token: string) {
+  return apiRequest<any>("/api/channels/behance/export-template", { token });
+}
