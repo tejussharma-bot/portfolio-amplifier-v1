@@ -11,12 +11,12 @@ type BadgeVariant =
   | "outline";
 
 const badgeStyles: Record<BadgeVariant, string> = {
-  neutral: "bg-ink-100 text-ink-800",
-  success: "bg-tide-100 text-tide-800",
-  warning: "bg-sand-100 text-sand-800",
-  danger: "bg-coral-100 text-coral-800",
-  info: "bg-sky-100 text-sky-800",
-  outline: "border border-border bg-white/70 text-foreground"
+  neutral: "bg-surface-container text-on-surface-variant",
+  success: "bg-secondary-container/35 text-on-secondary-container",
+  warning: "bg-primary-fixed text-primary",
+  danger: "bg-[#ffdad6] text-[#93000a]",
+  info: "bg-surface-container-high text-primary",
+  outline: "border border-outline-variant/20 bg-surface-container-low text-on-surface-variant"
 };
 
 export function Badge({
@@ -27,7 +27,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold tracking-wide",
+        "inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold tracking-[0.08em]",
         badgeStyles[variant],
         className
       )}
@@ -35,4 +35,3 @@ export function Badge({
     />
   );
 }
-

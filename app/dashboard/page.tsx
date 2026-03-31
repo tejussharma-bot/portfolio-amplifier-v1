@@ -1,80 +1,66 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   ArrowRight,
-  Clock3,
-  MessageSquareQuote,
-  Rocket,
-  ShieldCheck,
+  Download,
+  FolderOpen,
+  Palette,
+  Share2,
   Sparkles,
-  Target
+  Video
 } from "lucide-react";
 
 import { useAuth } from "@/components/providers/auth-provider";
-import { PageHeader } from "@/components/dashboard/page-header";
-import { MetricCard } from "@/components/dashboard/metric-card";
 import { Badge } from "@/components/ui/badge";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchChannelStatus, fetchProjects, fetchReviews } from "@/lib/api";
 import {
-  activityFeed as seedActivityFeed,
-  dashboardMetrics,
-  launchChecklist,
   projects as seedProjects,
   reviews as seedReviews
 } from "@/lib/data";
+import { cn } from "@/lib/utils";
 import { mergeChannelState, normalizeProjectRow, normalizeReviewRow } from "@/lib/view-models";
 
-type DashboardProject = {
-  id: string;
-  title: string;
-  client: string;
-  category: string;
-  role: string;
-  completedOn: string;
-  summary: string;
-  angle: string;
-  status: string;
-  channels: string[];
-  outcomes: string[];
-  assets: number;
-  reach: string;
-  lastGenerated: string;
-  rawStatus?: string;
-  blueprint?: any;
-};
+type DashboardProject = ReturnType<typeof normalizeProjectRow>;
+type DashboardReview = ReturnType<typeof normalizeReviewRow>;
 
-type DashboardReview = {
-  id: string;
-  client: string;
-  projectId: string;
-  source: string;
-  submittedAt: string;
-  sentiment: string;
-  rating: number;
-  content: string;
-  response: string | null;
-};
+function getProgress(status: string) {
+  switch (status) {
+    case "Published":
+      return 100;
+    case "Scheduled":
+      return 88;
+    case "Ready to amplify":
+      return 76;
+    case "Structuring":
+      return 54;
+    case "Analyzing":
+      return 42;
+    default:
+      return 30;
+  }
+}
 
-const iconTones = [
-  "bg-coral-50 text-coral-600",
-  "bg-tide-50 text-tide-700",
-  "bg-sand-50 text-sand-700",
-  "bg-ink-50 text-ink-700"
-];
+function projectArtworkTone(projectId: string) {
+  if (projectId.includes("branding") || projectId.includes("rebrand")) {
+    return "from-[#2b194f] via-[#3e51f7] to-[#8b5cf6]";
+  }
 
-const metricIcons = [Rocket, Clock3, Target, ShieldCheck];
+  if (projectId.includes("dashboard") || projectId.includes("portal")) {
+    return "from-[#c8d7ff] via-[#7aa8ff] to-[#3759ea]";
+  }
+
+  return "from-[#f4f3ff] via-[#c0c1ff] to-[#3939c7]";
+}
 
 export default function DashboardPage() {
-  const { token, isAuthenticated } = useAuth();
-  const [projects, setProjects] = useState<DashboardProject[]>(seedProjects);
-  const [reviews, setReviews] = useState<DashboardReview[]>(seedReviews);
+  const { token, isAuthenticated, user } = useAuth();
+  const [projects, setProjects] = useState<DashboardProject[]>(seedProjects as DashboardProject[]);
+  const [reviews, setReviews] = useState<DashboardReview[]>(seedReviews as DashboardReview[]);
   const [channelStatus, setChannelStatus] = useState(mergeChannelState([]));
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -83,8 +69,6 @@ export default function DashboardPage() {
       if (!token || !isAuthenticated) {
         return;
       }
-
-      setLoading(true);
 
       try {
         const [projectResult, reviewResult, channelResult] = await Promise.all([
@@ -104,10 +88,6 @@ export default function DashboardPage() {
         if (!active) {
           return;
         }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
       }
     }
 
@@ -118,265 +98,246 @@ export default function DashboardPage() {
     };
   }, [isAuthenticated, token]);
 
-  const publishedProjects = projects.filter((project) => project.status === "Published");
+  const heroProjects = projects.slice(0, 2);
+  const publishProjects = projects.filter((project) =>
+    ["Published", "Scheduled", "Ready to amplify"].includes(project.status)
+  );
   const pendingReviews = reviews.filter((review) => !review.response);
-  const connectedChannels = channelStatus.filter((channel) => channel.status === "Connected").length;
-  const activityItems = isAuthenticated
-    ? [
-        `${projects.filter((project) => project.status !== "Published").length} projects still in motion.`,
-        `${connectedChannels} channels currently connected.`,
-        `${pendingReviews.length} reviews still need attention.`,
-        loading ? "Live workspace sync in progress." : "Workspace synced with the backend."
-      ]
-    : seedActivityFeed;
+  const welcomeName = user?.fullName?.split(" ")[0] || "Alex";
+
+  const channelCards = useMemo(() => {
+    return channelStatus.map((channel) => ({
+      ...channel,
+      icon:
+        channel.id === "linkedin"
+          ? Share2
+          : channel.id === "behance"
+            ? Palette
+            : Sparkles,
+      tone:
+        channel.id === "linkedin"
+          ? "bg-blue-50 text-blue-600"
+          : channel.id === "behance"
+            ? "bg-orange-50 text-orange-600"
+            : "bg-pink-50 text-pink-500"
+    }));
+  }, [channelStatus]);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Workspace overview"
-        title="Portfolio intelligence, not just content output"
-        description="Track the product loop from first project intake to publish velocity and reputation follow-through."
-        badge={isAuthenticated ? "live" : "demo"}
-        actions={
-          <>
-            <Link
-              href="/dashboard/reviews"
-              className={buttonStyles({ variant: "outline", size: "md" })}
-            >
-              Import Reviews
-            </Link>
-            <Link
-              href="/dashboard/publish-studio"
-              className={buttonStyles({ variant: "outline", size: "md" })}
-            >
-              Open Publish Studio
-            </Link>
-            <Link href="/dashboard/projects" className={buttonStyles({ size: "md" })}>
-              New Project
-            </Link>
-          </>
-        }
-      />
+    <div className="space-y-8">
+      <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="font-display text-4xl font-extrabold tracking-[-0.05em] text-on-surface">
+            Welcome back, {welcomeName}
+          </h1>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-on-surface-variant">
+            Your portfolio has gained <span className="font-semibold text-secondary">+12% visibility</span>{" "}
+            this week. Here&apos;s what needs your focus today.
+          </p>
+        </div>
+        <Link href="/dashboard/reviews" className={buttonStyles({ variant: "secondary" })}>
+          <Download className="h-4 w-4" />
+          Import Reviews
+        </Link>
+      </header>
 
-      <section className="grid gap-4 xl:grid-cols-4">
-        {dashboardMetrics.map((metric, index) => {
-          const Icon = metricIcons[index];
-          const value =
-            index === 0 && isAuthenticated
-              ? `${projects.length}`
-              : index === 1 && isAuthenticated
-                ? `${pendingReviews.length}`
-                : index === 2 && isAuthenticated
-                  ? `${connectedChannels}`
-                  : metric.value;
-          const detail =
-            index === 0 && isAuthenticated
-              ? "projects in the workspace"
-              : index === 1 && isAuthenticated
-                ? "reviews waiting for replies"
-                : index === 2 && isAuthenticated
-                  ? "channels currently connected"
-                  : metric.detail;
-
-          return (
-            <MetricCard
-              key={metric.label}
-              label={metric.label}
-              value={value}
-              detail={detail}
-              icon={Icon}
-              iconTone={iconTones[index]}
-            />
-          );
-        })}
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+      <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card>
-          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
-              <CardTitle>Projects in motion</CardTitle>
-              <CardDescription>
-                A quick read on where portfolio assets are sitting in the V1 pipeline.
-              </CardDescription>
+              <CardTitle>Projects in progress</CardTitle>
             </div>
             <Link
               href="/dashboard/projects"
-              className={buttonStyles({ variant: "ghost", size: "sm" })}
+              className="text-sm font-bold uppercase tracking-[0.18em] text-primary"
             >
-              Manage projects
-              <ArrowRight className="h-4 w-4" />
+              View All
             </Link>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {projects.map((project) => (
+          <CardContent className="space-y-6">
+            {heroProjects.map((project) => (
               <div
                 key={project.id}
-                className="rounded-3xl border border-border bg-white/80 p-5 transition hover:-translate-y-0.5 hover:shadow-panel"
+                className="group flex items-center gap-5 rounded-[1.5rem] p-4 transition hover:bg-surface-container-low"
               >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-display text-xl font-semibold">{project.title}</h3>
-                      <Badge
-                        variant={
-                          project.status === "Published"
-                            ? "success"
-                            : project.status === "Analyzing" || project.status === "Structuring"
-                              ? "warning"
-                              : project.status === "Scheduled"
-                                ? "info"
-                                : "outline"
-                        }
-                      >
-                        {project.status}
-                      </Badge>
+                <div
+                  className={`flex h-20 w-20 items-center justify-center rounded-[1rem] bg-gradient-to-br ${projectArtworkTone(project.id)} shadow-panel`}
+                >
+                  <FolderOpen className="h-7 w-7 text-white/90" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-on-surface">{project.title}</h3>
+                  <div className="mt-3 flex items-center gap-4">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-container">
+                      <div
+                        className="h-full rounded-full bg-[linear-gradient(135deg,#1c32df_0%,#3e51f7_100%)]"
+                        style={{ width: `${getProgress(project.status)}%` }}
+                      />
                     </div>
-                    <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
-                      {project.summary}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline">{project.category}</Badge>
-                      <Badge variant="outline">{project.angle}</Badge>
-                      <Badge variant="outline">{project.assets} assets</Badge>
-                    </div>
-                  </div>
-                  <div className="grid gap-3 rounded-3xl bg-muted/70 p-4 text-sm sm:min-w-[220px]">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-muted-foreground">Reach</span>
-                      <span className="font-semibold">{project.reach}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-muted-foreground">Channels</span>
-                      <span className="font-semibold">
-                        {project.channels.length ? project.channels.join(", ") : "Recommended next"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-muted-foreground">Updated</span>
-                      <span className="font-semibold">{project.lastGenerated}</span>
-                    </div>
+                    <span className="text-xs font-bold text-on-surface-variant">
+                      {getProgress(project.status)}% Complete
+                    </span>
                   </div>
                 </div>
-                <div className="mt-5 flex flex-wrap gap-3">
-                  {project.outcomes.map((outcome) => (
-                    <div
-                      key={outcome}
-                      className="rounded-full bg-ink-50 px-3 py-2 text-xs font-semibold text-ink-700"
-                    >
-                      {outcome}
-                    </div>
-                  ))}
-                </div>
+                <ArrowRight className="h-5 w-5 text-outline transition group-hover:text-primary" />
               </div>
             ))}
           </CardContent>
         </Card>
 
-        <div className="grid gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Live activity</CardTitle>
-              <CardDescription>Signals that matter across analysis, publishing, and reviews.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {activityItems.map((item) => (
-                <div key={item} className="flex gap-3 rounded-2xl bg-muted/70 p-4">
-                  <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-coral-50 text-coral-600">
-                    <Activity className="h-4 w-4" />
-                  </span>
-                  <p className="text-sm leading-7">{item}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <CardTitle>ORM inbox</CardTitle>
-                  <CardDescription>Pending feedback that still needs a human-approved response.</CardDescription>
-                </div>
-                <Badge variant="danger">{pendingReviews.length} pending</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {pendingReviews.slice(0, 3).map((review) => (
-                <div key={review.id} className="rounded-2xl border border-border bg-white/80 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">{review.client}</p>
-                      <p className="text-sm text-muted-foreground">{review.submittedAt}</p>
+        <Card className="bg-surface-container-low">
+          <CardHeader>
+            <CardTitle>Connected channels</CardTitle>
+          </CardHeader>
+          <CardContent className="flex h-full flex-col justify-between">
+            <div className="space-y-4">
+              {channelCards.map((channel) => (
+                <div
+                  key={channel.id}
+                  className={cn(
+                    "flex items-center justify-between rounded-xl bg-surface-container-lowest p-3",
+                    channel.status === "Export mode" && "opacity-70"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${channel.tone}`}>
+                      <channel.icon className="h-4 w-4" />
                     </div>
-                    <Badge
-                      variant={
-                        review.sentiment === "positive"
-                          ? "success"
-                          : review.sentiment === "negative"
-                            ? "danger"
-                            : "warning"
-                      }
-                    >
-                      {review.sentiment}
-                    </Badge>
+                    <span className="text-sm font-semibold text-on-surface">{channel.name}</span>
                   </div>
-                  <p className="mt-3 text-sm leading-7 text-muted-foreground">{review.content}</p>
+                  <Badge
+                    variant={
+                      channel.status === "Connected"
+                        ? "success"
+                        : channel.status === "Needs reconnect"
+                          ? "danger"
+                          : "outline"
+                    }
+                    className="rounded-md px-2 py-1 text-[10px] uppercase tracking-[0.16em]"
+                  >
+                    {channel.status === "Export mode" ? "Offline" : channel.status}
+                  </Badge>
                 </div>
               ))}
-              <Link
-                href="/dashboard/reviews"
-                className={buttonStyles({ variant: "outline", className: "w-full" })}
-              >
-                Open response workflow
-              </Link>
-            </CardContent>
-          </Card>
+            </div>
+
+            <div className="mt-8 rounded-[1.5rem] bg-secondary-container/18 p-4">
+              <p className="text-xs italic text-secondary">AI Insight</p>
+              <p className="mt-1 text-xs leading-6 text-on-surface-variant">
+                2 channels recommended for your latest project.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section>
+        <div className="relative overflow-hidden rounded-[2.5rem] bg-[linear-gradient(135deg,#1c32df_0%,#3e51f7_100%)] p-10 text-white shadow-glow sm:p-12">
+          <div className="absolute inset-y-0 right-0 w-1/3 bg-[radial-gradient(circle_at_center,rgba(84,248,215,0.18),transparent_60%)]" />
+          <div className="relative max-w-2xl">
+            <span className="inline-flex rounded-full bg-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
+              Action Required
+            </span>
+            <h2 className="mt-6 font-display text-4xl font-extrabold leading-tight tracking-[-0.04em]">
+              Complete your first case study to unlock the full portfolio analytics.
+            </h2>
+            <p className="mt-4 text-base leading-7 text-white/78">
+              Detailed case studies receive 4.5x more engagement from high-tier recruiters and
+              clients.
+            </p>
+            <Link
+              href="/dashboard/projects"
+              className={buttonStyles({
+                variant: "secondary",
+                className: "mt-8 bg-white text-primary hover:bg-surface-container-low"
+              })}
+            >
+              Get Started Now
+            </Link>
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <Card className="bg-ink-900 text-white">
+      <section className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+        <Card className="bg-surface-container-low">
           <CardHeader>
-            <CardTitle className="text-white">Launch criteria pulse</CardTitle>
-            <CardDescription className="text-white/70">
-              A design-facing view of the go / no-go checklist from the PRD.
-            </CardDescription>
+            <CardTitle>Ready to publish</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {launchChecklist.map((item) => (
-              <div key={item.label} className="flex items-center justify-between rounded-2xl bg-white/10 px-4 py-3">
-                <span className="text-sm font-semibold text-white/88">{item.label}</span>
-                <Badge variant={item.done ? "success" : "warning"}>{item.done ? "ready" : "in progress"}</Badge>
+            {publishProjects.slice(0, 2).map((project, index) => (
+              <div
+                key={project.id}
+                className="flex items-center gap-4 rounded-[1.5rem] bg-surface-container-lowest p-4 shadow-panel"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface">
+                  {index === 0 ? (
+                    <Share2 className="h-5 w-5 text-primary" />
+                  ) : (
+                    <Video className="h-5 w-5 text-primary" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-on-surface">{project.title}</p>
+                  <p className="text-[11px] font-medium text-on-surface-variant">
+                    {project.status} • {project.lastGenerated}
+                  </p>
+                </div>
               </div>
             ))}
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-[1.5rem] border border-dashed border-outline-variant/40 bg-white/50 p-4 text-center">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-outline">
+                  Scheduled Posts
+                </p>
+                <p className="mt-2 text-2xl font-display font-extrabold text-on-surface">14</p>
+              </div>
+              <div className="rounded-[1.5rem] border border-dashed border-outline-variant/40 bg-white/50 p-4 text-center">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-outline">
+                  Exported Posts
+                </p>
+                <p className="mt-2 text-2xl font-display font-extrabold text-on-surface">128</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Why published work is winning</CardTitle>
-            <CardDescription>
-              Published projects are performing because they connect impact, visuals, and channel fit
-              instead of acting like generic portfolio pages.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <div>
+              <CardTitle>Unanswered reviews</CardTitle>
+              <CardDescription>4 new messages from potential clients</CardDescription>
+            </div>
+            <button className="rounded-xl p-2 text-outline hover:bg-surface-container-low">
+              <Sparkles className="h-4 w-4" />
+            </button>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-3xl bg-coral-50 p-5">
-              <Sparkles className="h-5 w-5 text-coral-600" />
-              <p className="mt-4 font-display text-xl font-semibold">{publishedProjects.length}</p>
-              <p className="mt-1 text-sm text-muted-foreground">projects already published</p>
-            </div>
-            <div className="rounded-3xl bg-tide-50 p-5">
-              <Rocket className="h-5 w-5 text-tide-700" />
-              <p className="mt-4 font-display text-xl font-semibold">{connectedChannels}</p>
-              <p className="mt-1 text-sm text-muted-foreground">channels connected for direct publishing</p>
-            </div>
-            <div className="rounded-3xl bg-sand-50 p-5">
-              <MessageSquareQuote className="h-5 w-5 text-sand-700" />
-              <p className="mt-4 font-display text-xl font-semibold">{pendingReviews.length}</p>
-              <p className="mt-1 text-sm text-muted-foreground">reviews still waiting for a response</p>
-            </div>
+          <CardContent className="space-y-4">
+            {pendingReviews.slice(0, 2).map((review) => (
+              <div
+                key={review.id}
+                className="rounded-[1.5rem] p-4 transition hover:bg-surface-container-low"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-fixed text-xs font-bold text-primary">
+                    {review.client
+                      .split(" ")
+                      .slice(0, 2)
+                      .map((part: string) => part[0])
+                      .join("")}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <h4 className="text-sm font-bold text-on-surface">{review.client}</h4>
+                      <span className="text-[11px] text-on-surface-variant">{review.submittedAt}</span>
+                    </div>
+                    <p className="mt-2 text-xs italic leading-6 text-on-surface-variant">
+                      &quot;{review.content}&quot;
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
       </section>

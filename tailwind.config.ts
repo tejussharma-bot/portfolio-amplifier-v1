@@ -9,94 +9,115 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        card: "hsl(var(--card))",
-        "card-foreground": "hsl(var(--card-foreground))",
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        muted: "hsl(var(--muted))",
-        "muted-foreground": "hsl(var(--muted-foreground))",
+        background: "#faf8ff",
+        foreground: "#131b2e",
+        card: "#ffffff",
+        "card-foreground": "#131b2e",
+        border: "rgba(197, 197, 217, 0.16)",
+        input: "rgba(218, 226, 253, 0.4)",
+        muted: "#f2f3ff",
+        "muted-foreground": "#444656",
+        ring: "#1c32df",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))"
+          DEFAULT: "#1c32df",
+          foreground: "#ffffff"
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))"
+          DEFAULT: "#006b5a",
+          foreground: "#ffffff"
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))"
+          DEFAULT: "#3e51f7",
+          foreground: "#ffffff"
         },
-        ring: "hsl(var(--ring))",
+        surface: "#faf8ff",
+        "surface-bright": "#faf8ff",
+        "surface-container-lowest": "#ffffff",
+        "surface-container-low": "#f2f3ff",
+        "surface-container": "#eaedff",
+        "surface-container-high": "#e2e7ff",
+        "surface-container-highest": "#dae2fd",
+        outline: "#757687",
+        "outline-variant": "#c5c5d9",
+        "on-surface": "#131b2e",
+        "on-surface-variant": "#444656",
+        "secondary-container": "#54f8d7",
+        "on-secondary-container": "#00705e",
+        "primary-fixed": "#dfe0ff",
+        "primary-container": "#3e51f7",
+        "inverse-surface": "#283044",
+        "inverse-on-surface": "#eef0ff",
         ink: {
-          50: "#f6f7f8",
-          100: "#e8ebee",
-          200: "#cbd3d9",
-          300: "#a7b5c0",
-          400: "#7b8e9d",
-          500: "#5d7182",
-          600: "#485a6b",
-          700: "#3a4958",
-          800: "#303c48",
-          900: "#1f2933"
-        },
-        tide: {
-          50: "#effaf9",
-          100: "#d7f2ee",
-          200: "#b1e5dd",
-          300: "#7fd0c4",
-          400: "#4fb8aa",
-          500: "#2b9d92",
-          600: "#1f7d76",
-          700: "#1d645f",
-          800: "#1b504d",
-          900: "#163f3d"
+          50: "#f4f6fb",
+          100: "#e9edfa",
+          200: "#d6dcf5",
+          300: "#b8c0e9",
+          400: "#8f99c2",
+          500: "#66708f",
+          600: "#505a78",
+          700: "#3c4660",
+          800: "#283044",
+          900: "#131b2e"
         },
         coral: {
-          50: "#fff5f0",
-          100: "#ffe7d8",
-          200: "#ffccb0",
-          300: "#ffab7d",
-          400: "#ff7f4d",
-          500: "#f55d29",
-          600: "#dd4618",
-          700: "#b83715",
-          800: "#933019",
-          900: "#752a17"
+          50: "#eef1ff",
+          100: "#dfe4ff",
+          200: "#bdc2ff",
+          300: "#9fa9ff",
+          400: "#7280ff",
+          500: "#3e51f7",
+          600: "#3346ee",
+          700: "#1c32df",
+          800: "#0824d8",
+          900: "#000965"
+        },
+        tide: {
+          50: "#e8fcf8",
+          100: "#c8f7ef",
+          200: "#9fefdf",
+          300: "#72e6cf",
+          400: "#44ddc0",
+          500: "#2cdebf",
+          600: "#12b59a",
+          700: "#006b5a",
+          800: "#005143",
+          900: "#00372f"
         },
         sand: {
-          50: "#fffdf7",
-          100: "#fff8ea",
-          200: "#f9ecd0",
-          300: "#f1d8a4",
-          400: "#e6bc69",
-          500: "#da9f38",
-          600: "#bf7f29",
-          700: "#9d6024",
-          800: "#824d25",
-          900: "#6c4023"
+          50: "#f4f3ff",
+          100: "#e7e5ff",
+          200: "#d9d5ff",
+          300: "#c0c1ff",
+          400: "#8f91ff",
+          500: "#5355e0",
+          600: "#3939c7",
+          700: "#2f2ebe",
+          800: "#1a1a96",
+          900: "#07006c"
         }
       },
       fontFamily: {
         display: ["var(--font-display)", "sans-serif"],
-        body: ["var(--font-body)", "sans-serif"]
+        body: ["var(--font-body)", "sans-serif"],
+        label: ["var(--font-label)", "sans-serif"]
       },
       borderRadius: {
-        xl: "1.25rem",
-        "2xl": "1.75rem",
-        "3xl": "2rem"
+        xl: "0.75rem",
+        "2xl": "1.25rem",
+        "3xl": "2rem",
+        "4xl": "2.5rem"
       },
       boxShadow: {
-        glow: "0 20px 70px -35px rgba(245, 93, 41, 0.45)",
-        panel: "0 30px 80px -45px rgba(31, 41, 51, 0.28)"
+        ambient: "0 24px 48px rgba(19, 27, 46, 0.06)",
+        floating: "0 24px 48px rgba(19, 27, 46, 0.1)",
+        glow: "0 18px 40px rgba(28, 50, 223, 0.18)",
+        panel: "0 18px 36px rgba(19, 27, 46, 0.05)"
       },
       backgroundImage: {
-        "hero-mesh":
-          "radial-gradient(circle at 20% 20%, rgba(245,93,41,0.18), transparent 32%), radial-gradient(circle at 82% 18%, rgba(43,157,146,0.16), transparent 28%), radial-gradient(circle at 52% 82%, rgba(218,159,56,0.18), transparent 26%)",
-        "grid-fade":
-          "linear-gradient(rgba(31,41,51,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(31,41,51,0.05) 1px, transparent 1px)"
+        "pulse-primary": "linear-gradient(135deg, #1c32df 0%, #3e51f7 100%)",
+        "pulse-secondary": "linear-gradient(135deg, #006b5a 0%, #2cdebf 100%)",
+        "gallery-glow":
+          "radial-gradient(circle at top left, rgba(28,50,223,0.1), transparent 28%), radial-gradient(circle at top right, rgba(0,107,90,0.08), transparent 24%), linear-gradient(180deg, #faf8ff 0%, #f8f7ff 52%, #f2f3ff 100%)"
       },
       keyframes: {
         appear: {
@@ -106,16 +127,11 @@ const config: Config = {
         float: {
           "0%, 100%": { transform: "translateY(0px)" },
           "50%": { transform: "translateY(-8px)" }
-        },
-        shimmer: {
-          "0%": { backgroundPosition: "-200% 0" },
-          "100%": { backgroundPosition: "200% 0" }
         }
       },
       animation: {
         appear: "appear 0.7s ease-out",
-        float: "float 7s ease-in-out infinite",
-        shimmer: "shimmer 2.8s linear infinite"
+        float: "float 7s ease-in-out infinite"
       }
     }
   },
@@ -123,4 +139,3 @@ const config: Config = {
 };
 
 export default config;
-

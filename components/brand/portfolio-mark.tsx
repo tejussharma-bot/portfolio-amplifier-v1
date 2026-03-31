@@ -20,33 +20,25 @@ export function PortfolioMark({
       href="/"
       className={cn(
         "inline-flex items-center gap-3",
-        isLight ? "text-white" : "text-foreground",
+        isLight ? "text-white" : "text-on-surface",
         className
       )}
     >
-      <span
-        className={cn(
-          "relative flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-glow",
-          isLight ? "bg-white/10" : "bg-ink-900"
-        )}
-      >
-        <span
-          className={cn(
-            "absolute inset-0 rounded-2xl bg-gradient-to-br opacity-90",
-            isLight
-              ? "from-[#7c3aed] via-[#ec4899] to-[#f97316]"
-              : "from-coral-400 via-sand-300 to-tide-400"
-          )}
-        />
-        <span className="relative font-display text-lg font-bold">PA</span>
+      <span className="ai-pulse-gradient inline-flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold text-white shadow-glow">
+        P
       </span>
       {!compact ? (
         <span className="flex flex-col">
-          <span className="font-display text-lg font-semibold leading-none">
+          <span className="font-display text-lg font-extrabold tracking-[-0.03em]">
             Portfolio Amplifier
           </span>
-          <span className={cn("text-sm", isLight ? "text-white/60" : "text-muted-foreground")}>
-            reputation engine for modern freelancers
+          <span
+            className={cn(
+              "text-[10px] font-semibold uppercase tracking-[0.2em]",
+              isLight ? "text-white/60" : "text-primary/70"
+            )}
+          >
+            Elite Creator
           </span>
         </span>
       ) : null}

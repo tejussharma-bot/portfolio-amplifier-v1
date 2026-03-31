@@ -3,6 +3,7 @@ node_modules
 out
 dist
 .vercel
+.tmp
 .env
 .env.local
 coverage

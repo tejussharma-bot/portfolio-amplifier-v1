@@ -18,13 +18,13 @@ export function MetricCard({
   iconTone
 }: MetricCardProps) {
   return (
-    <Card className="overflow-hidden">
+    <Card className="bg-surface-container-low">
       <CardContent className="p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">{label}</p>
-            <p className="font-display text-3xl font-semibold tracking-tight">{value}</p>
-            <p className="text-sm text-muted-foreground">{detail}</p>
+            <p className="text-sm font-medium text-on-surface-variant">{label}</p>
+            <p className="font-display text-3xl font-extrabold tracking-[-0.04em]">{value}</p>
+            <p className="text-sm text-on-surface-variant">{detail}</p>
           </div>
           <span
             className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl ${iconTone}`}
@@ -36,4 +36,3 @@ export function MetricCard({
     </Card>
   );
 }
-

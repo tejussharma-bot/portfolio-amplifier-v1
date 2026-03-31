@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
+  Bell,
   BriefcaseBusiness,
   LayoutDashboard,
   Menu,
   Megaphone,
-  Settings,
-  ShieldCheck,
-  Star,
   PlugZap,
+  Search,
+  Settings,
+  Star,
   X
 } from "lucide-react";
 
@@ -29,156 +30,157 @@ const navigation = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings }
 ];
 
+function getInitials(name?: string | null) {
+  if (!name) {
+    return "DE";
+  }
+
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const { user, ready, logout, isAuthenticated } = useAuth();
 
+  const headlineName = useMemo(() => {
+    if (!user?.fullName) {
+      return "Alex";
+    }
+
+    return user.fullName.split(" ")[0];
+  }, [user?.fullName]);
+
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto grid min-h-screen max-w-[1600px] lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside
-          className={cn(
-            "fixed inset-y-0 left-0 z-50 w-[280px] border-r border-white/60 bg-[#fffaf3]/95 px-5 py-5 shadow-panel backdrop-blur transition-transform duration-300 lg:static lg:translate-x-0",
-            isOpen ? "translate-x-0" : "-translate-x-full"
-          )}
-        >
-          <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between">
-              <PortfolioMark compact />
-              <button
-                className="rounded-full p-2 text-muted-foreground lg:hidden"
+    <div className="min-h-screen bg-background text-on-surface">
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-slate-50/70 p-4 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <div className="flex items-center justify-between px-3 py-4">
+          <PortfolioMark />
+          <button
+            className="rounded-xl p-2 text-on-surface-variant lg:hidden"
+            onClick={() => setIsOpen(false)}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <nav className="mt-6 flex-1 space-y-1">
+          {navigation.map((item) => {
+            const Icon = item.icon;
+            const active =
+              pathname === item.href ||
+              (item.href !== "/dashboard" && pathname.startsWith(item.href));
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-full px-4 py-3 text-sm transition-all duration-200",
+                  active
+                    ? "bg-surface-container-lowest font-semibold text-primary shadow-panel"
+                    : "text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
+                )}
                 onClick={() => setIsOpen(false)}
               >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+                <Icon className="h-4 w-4" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
-            <div className="mt-8 panel bg-gradient-to-br from-ink-900 to-ink-800 p-5 text-white">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/60">
-                V1 journey
-              </p>
-              <h2 className="mt-3 font-display text-2xl font-semibold">
-                Onboard. Create. Amplify. Publish. Respond.
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-white/72">
-                Projects stay at the center, while publishing and ORM branch naturally from the
-                same proof asset.
-              </p>
-              <div className="mt-5 flex items-center gap-2 rounded-2xl bg-white/10 px-3 py-2 text-sm">
-                <ShieldCheck className="h-4 w-4 text-tide-200" />
-                OAuth fallback + export mode ready
-              </div>
-            </div>
-
-            <nav className="mt-8 space-y-2">
-              {navigation.map((item) => {
-                const Icon = item.icon;
-                const active =
-                  pathname === item.href ||
-                  (item.href !== "/dashboard" && pathname.startsWith(item.href));
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition",
-                      active
-                        ? "bg-ink-900 text-white shadow-lg"
-                        : "text-ink-700 hover:bg-white hover:text-ink-900"
-                    )}
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-
-            <div className="mt-auto panel p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Workspace
-              </p>
-              <h3 className="mt-2 font-display text-lg font-semibold">
-                {user?.fullName || "Demo workspace"}
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {isAuthenticated
-                  ? `${user?.role || "Workspace"} ready. Live data is available across projects, publishing, and reviews.`
-                  : "Sign in to switch from demo visuals to the live backend workspace."}
-              </p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                {isAuthenticated ? (
-                  <button
-                    className={buttonStyles({ variant: "outline", size: "sm" })}
-                    onClick={logout}
-                  >
-                    Log out
-                  </button>
-                ) : ready ? (
-                  <Link
-                    href="/login"
-                    className={buttonStyles({ variant: "outline", size: "sm" })}
-                  >
-                    Log in
-                  </Link>
-                ) : null}
-              </div>
-            </div>
+        <div className="mt-6 rounded-[1.5rem] bg-primary-fixed p-4">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Pro plan</p>
+          <p className="mt-1 text-[11px] text-primary/65">85% of storage used</p>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/50">
+            <div className="h-full w-[85%] rounded-full bg-[linear-gradient(135deg,#1c32df_0%,#3e51f7_100%)]" />
           </div>
-        </aside>
+        </div>
+      </aside>
 
-        {isOpen ? (
-          <button
-            aria-label="Close navigation"
-            className="fixed inset-0 z-40 bg-ink-900/25 lg:hidden"
-            onClick={() => setIsOpen(false)}
-          />
-        ) : null}
+      {isOpen ? (
+        <button
+          aria-label="Close navigation"
+          className="fixed inset-0 z-30 bg-ink-900/10 lg:hidden"
+          onClick={() => setIsOpen(false)}
+        />
+      ) : null}
 
-        <div className="min-w-0 px-4 pb-10 pt-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between rounded-3xl border border-white/70 bg-white/70 px-4 py-3 backdrop-blur lg:hidden">
-            <PortfolioMark compact />
+      <div className="lg:ml-64">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 bg-slate-50/80 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
             <button
               aria-label="Open navigation"
-              className="rounded-full border border-border p-2 text-foreground"
+              className="rounded-xl p-2 text-on-surface-variant lg:hidden"
               onClick={() => setIsOpen(true)}
             >
               <Menu className="h-5 w-5" />
             </button>
+            <div className="relative hidden sm:block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline" />
+              <input
+                className="h-10 w-64 rounded-full border border-transparent bg-surface-container-low px-10 text-xs text-on-surface outline-none transition focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/15"
+                placeholder="Search projects..."
+                type="text"
+              />
+            </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between gap-3 rounded-3xl border border-white/60 bg-white/55 px-4 py-3 text-sm text-muted-foreground backdrop-blur">
-            <p>
-              {isAuthenticated ? (
-                <>
-                  Signed in as{" "}
-                  <span className="font-semibold text-foreground">
-                    {user?.email || "workspace user"}
-                  </span>
-                </>
-              ) : (
-                <>
-                  Demo mode is showing seeded content.{" "}
-                  <span className="font-semibold text-foreground">Log in for live backend data</span>
-                </>
-              )}
-            </p>
-            <Link
-              href="/"
-              className={buttonStyles({
-                variant: "ghost",
-                size: "sm",
-                className: "hidden md:inline-flex"
-              })}
-            >
-              View product story
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard/projects" className={buttonStyles({ size: "sm" })}>
+              + New Project
             </Link>
+            <button className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container-low">
+              <Bell className="h-5 w-5" />
+            </button>
+            <div className="flex items-center gap-3 border-l border-outline-variant/15 pl-3">
+              <div className="hidden text-right sm:block">
+                <p className="text-sm font-semibold text-on-surface">
+                  {isAuthenticated ? `Welcome back, ${headlineName}` : "Demo workspace"}
+                </p>
+                <p className="text-[11px] text-on-surface-variant">
+                  {isAuthenticated ? user?.email : "Seeded product walkthrough"}
+                </p>
+              </div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,#1c32df_0%,#3e51f7_100%)] text-xs font-bold text-white shadow-panel">
+                {getInitials(user?.fullName)}
+              </div>
+            </div>
           </div>
+        </header>
 
-          <main className="mt-6">{children}</main>
+        <div className="px-4 pb-12 pt-8 sm:px-6 lg:px-8">
+          {!isAuthenticated && ready ? (
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] bg-surface-container-low px-5 py-4">
+              <p className="text-sm text-on-surface-variant">
+                Demo mode is active. Sign in when you want live backend data instead of seeded
+                projects and reviews.
+              </p>
+              <div className="flex gap-3">
+                <Link href="/login" className={buttonStyles({ variant: "outline", size: "sm" })}>
+                  Log in
+                </Link>
+                <button
+                  className={buttonStyles({ variant: "ghost", size: "sm" })}
+                  onClick={logout}
+                >
+                  Clear session
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <main>{children}</main>
         </div>
       </div>
     </div>

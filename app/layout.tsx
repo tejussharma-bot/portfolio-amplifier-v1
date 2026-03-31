@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { DM_Sans, Inter } from "next/font/google";
+import { Inter, Manrope } from "next/font/google";
 
 import { AuthProvider } from "@/components/providers/auth-provider";
 
 import "./globals.css";
 
-const dmSans = DM_Sans({
+const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-display"
 });
@@ -28,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${dmSans.variable} ${inter.variable}`}>
+      <body className={`${manrope.variable} ${inter.variable} [--font-label:var(--font-body)]`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

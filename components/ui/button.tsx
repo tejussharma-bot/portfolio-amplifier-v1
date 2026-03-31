@@ -7,13 +7,13 @@ type ButtonSize = "sm" | "md" | "lg";
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    "bg-primary text-primary-foreground shadow-glow hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-30px_rgba(245,93,41,0.55)]",
+    "ai-pulse-gradient text-white shadow-glow hover:-translate-y-0.5 hover:shadow-[0_24px_48px_rgba(28,50,223,0.24)]",
   secondary:
-    "bg-secondary text-secondary-foreground hover:bg-tide-100",
+    "bg-surface-container-lowest text-primary shadow-panel hover:bg-surface-container-low",
   outline:
-    "border border-border bg-white/70 text-foreground hover:border-coral-300 hover:bg-coral-50",
+    "border border-outline-variant/20 bg-surface-container-lowest/85 text-primary hover:bg-surface-container-low",
   ghost:
-    "text-foreground hover:bg-ink-50"
+    "bg-transparent text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -32,7 +32,7 @@ export function buttonStyles({
   className?: string;
 }) {
   return cn(
-    "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+    "inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
     variantStyles[variant],
     sizeStyles[size],
     className
