@@ -40,9 +40,13 @@ router.post("/register", async (req, res) => {
     return res.status(400).json({ error: "Email and password are required" });
   }
 
+  const client = await pool.connect();
+
   try {
     const passwordHash = await bcrypt.hash(password, 10);
-    const result = await pool.query(
+    await client.query("BEGIN");
+
+    const result = await client.query(
       `INSERT INTO users (email, password_hash, full_name)
        VALUES ($1, $2, $3)
        RETURNING *`,
@@ -50,16 +54,34 @@ router.post("/register", async (req, res) => {
     );
 
     const user = result.rows[0];
+    await client.query(
+      `INSERT INTO workspace_settings (user_id)
+       VALUES ($1)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [user.id]
+    );
+    await client.query(
+      `INSERT INTO user_preferences (user_id)
+       VALUES ($1)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [user.id]
+    );
+    await client.query("COMMIT");
+
     return res.status(201).json({
       user: serializeUser(user),
       token: signToken(user)
     });
   } catch (error) {
+    await client.query("ROLLBACK");
+
     if (error.code === "23505") {
       return res.status(409).json({ error: "A user with this email already exists" });
     }
 
     return res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -141,6 +163,18 @@ router.get("/google/callback", (req, res, next) => {
              VALUES ($1, $2, $3)
              RETURNING *`,
             [profile.email.toLowerCase(), profile.googleId, profile.fullName || null]
+          );
+          await client.query(
+            `INSERT INTO workspace_settings (user_id)
+             VALUES ($1)
+             ON CONFLICT (user_id) DO NOTHING`,
+            [userResult.rows[0].id]
+          );
+          await client.query(
+            `INSERT INTO user_preferences (user_id)
+             VALUES ($1)
+             ON CONFLICT (user_id) DO NOTHING`,
+            [userResult.rows[0].id]
           );
         } else {
           userResult = await client.query(

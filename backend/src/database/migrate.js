@@ -33,6 +33,19 @@ async function migrate() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS workspace_settings (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        default_objective VARCHAR(100) DEFAULT 'Get clients',
+        default_tone VARCHAR(50) DEFAULT 'Professional',
+        default_review_tone VARCHAR(50) DEFAULT 'professional',
+        timezone VARCHAR(100) DEFAULT 'Asia/Calcutta',
+        publishing_defaults JSONB DEFAULT '{}'::jsonb,
+        notification_preferences JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS projects (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -122,6 +135,13 @@ async function migrate() {
       CREATE INDEX IF NOT EXISTS idx_generated_content_project_id ON generated_content(project_id);
       CREATE INDEX IF NOT EXISTS idx_reviews_user_id ON reviews(user_id);
       CREATE INDEX IF NOT EXISTS idx_user_channels_user_id ON user_channels(user_id);
+    `);
+
+    await client.query(`
+      ALTER TABLE generated_content
+        ADD COLUMN IF NOT EXISTS external_post_id TEXT,
+        ADD COLUMN IF NOT EXISTS export_payload JSONB DEFAULT '{}'::jsonb,
+        ADD COLUMN IF NOT EXISTS exported_at TIMESTAMP;
     `);
 
     await client.query("COMMIT");

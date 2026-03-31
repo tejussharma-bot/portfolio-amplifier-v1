@@ -8,6 +8,8 @@ const projectRoutes = require("./routes/projects");
 const amplifyRoutes = require("./routes/amplify");
 const channelRoutes = require("./routes/channels");
 const ormRoutes = require("./routes/orm");
+const dashboardRoutes = require("./routes/dashboard");
+const settingsRoutes = require("./routes/settings");
 const { configurePassport } = require("./config/passport");
 
 dotenv.config();
@@ -37,6 +39,8 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/amplify", amplifyRoutes);
 app.use("/api/channels", channelRoutes);
 app.use("/api/orm", ormRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/settings", settingsRoutes);
 
 app.use((error, _req, res, _next) => {
   console.error(error);

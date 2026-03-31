@@ -1,8 +1,14 @@
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const { hasConfiguredCredentials } = require("../utils/config");
 
 function configurePassport() {
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+  if (
+    !hasConfiguredCredentials(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    )
+  ) {
     return;
   }
 

@@ -1,11 +1,8 @@
 const axios = require("axios");
+const { isPlaceholderValue } = require("../utils/config");
 
 function buildRemoteClient() {
-  if (!process.env.AI_SERVICE_URL || !process.env.AI_API_KEY) {
-    return null;
-  }
-
-  if (process.env.AI_API_KEY.includes("your_openai_key")) {
+  if (!process.env.AI_SERVICE_URL || isPlaceholderValue(process.env.AI_API_KEY)) {
     return null;
   }
 

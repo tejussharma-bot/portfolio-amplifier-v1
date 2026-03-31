@@ -8,13 +8,11 @@ const { pool } = require("../database/config");
 const { authenticateToken } = require("../middleware/auth");
 const { generatePortfolioDraft } = require("../services/ai");
 
-const uploadDir = path.join(process.cwd(), "uploads");
+const uploadDir = path.join(__dirname, "..", "..", "uploads");
 fs.mkdirSync(uploadDir, { recursive: true });
 
 const upload = multer({ dest: uploadDir });
 const router = express.Router();
-
-router.use(authenticateToken);
 
 function parseJsonArray(value) {
   if (!value) {
@@ -36,6 +34,13 @@ function parseJsonArray(value) {
   }
 }
 
+function slugify(value) {
+  return String(value || "project")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 async function getOwnedProject(projectId, userId) {
   const result = await pool.query(
     `SELECT p.*, pf.content_json, pf.is_published, pf.public_slug
@@ -47,6 +52,31 @@ async function getOwnedProject(projectId, userId) {
 
   return result.rows[0];
 }
+
+router.get("/public/:slug", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.id, p.title, p.client_name, p.category, p.industry, p.timeline, p.challenge_text,
+              p.solution_text, p.results_text, p.deliverables, p.assets_url, p.testimonials,
+              pf.content_json, pf.public_slug, pf.published_at
+       FROM portfolios pf
+       INNER JOIN projects p ON p.id = pf.project_id
+       WHERE pf.public_slug = $1 AND pf.is_published = TRUE
+       LIMIT 1`,
+      [req.params.slug]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "Published portfolio not found" });
+    }
+
+    return res.json({ portfolio: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+router.use(authenticateToken);
 
 router.get("/", async (req, res) => {
   try {
@@ -168,10 +198,7 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
 
     const project = projectResult.rows[0];
     const portfolioDraft = await generatePortfolioDraft(project);
-    const publicSlug = `${title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")}-${uuidv4().slice(0, 8)}`;
+    const publicSlug = `${slugify(title)}-${uuidv4().slice(0, 8)}`;
 
     await client.query(
       `INSERT INTO portfolios (project_id, content_json, public_slug)
@@ -223,7 +250,7 @@ router.post("/:projectId/generate-portfolio", async (req, res) => {
       [
         project.id,
         JSON.stringify(portfolioDraft),
-        `${project.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${uuidv4().slice(0, 8)}`
+        `${slugify(project.title)}-${uuidv4().slice(0, 8)}`
       ]
     );
 
@@ -252,7 +279,7 @@ router.put("/:projectId/portfolio", async (req, res) => {
 
     const publicSlug =
       project.public_slug ||
-      `${project.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${uuidv4().slice(0, 8)}`;
+      `${slugify(project.title)}-${uuidv4().slice(0, 8)}`;
 
     const result = await pool.query(
       `UPDATE portfolios
@@ -274,6 +301,81 @@ router.put("/:projectId/portfolio", async (req, res) => {
     );
 
     return res.json({ portfolio: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+router.put("/:projectId", async (req, res) => {
+  const {
+    title,
+    client_name,
+    category,
+    industry,
+    timeline,
+    source_url,
+    challenge,
+    solution,
+    results,
+    deliverables,
+    testimonials
+  } = req.body;
+
+  try {
+    const project = await getOwnedProject(req.params.projectId, req.user.userId);
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    const result = await pool.query(
+      `UPDATE projects
+       SET title = COALESCE($1, title),
+           client_name = COALESCE($2, client_name),
+           category = COALESCE($3, category),
+           industry = COALESCE($4, industry),
+           timeline = COALESCE($5, timeline),
+           source_url = COALESCE($6, source_url),
+           challenge_text = COALESCE($7, challenge_text),
+           solution_text = COALESCE($8, solution_text),
+           results_text = COALESCE($9, results_text),
+           deliverables = COALESCE($10, deliverables),
+           testimonials = COALESCE($11, testimonials),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $12
+       RETURNING *`,
+      [
+        title || null,
+        client_name || null,
+        category || null,
+        industry || null,
+        timeline || null,
+        source_url || null,
+        challenge || null,
+        solution || null,
+        results || null,
+        deliverables ? JSON.stringify(parseJsonArray(deliverables)) : null,
+        testimonials ? JSON.stringify(parseJsonArray(testimonials)) : null,
+        project.id
+      ]
+    );
+
+    return res.json({ project: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete("/:projectId", async (req, res) => {
+  try {
+    const project = await getOwnedProject(req.params.projectId, req.user.userId);
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    await pool.query("DELETE FROM projects WHERE id = $1", [project.id]);
+    return res.json({ message: "Project deleted" });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
