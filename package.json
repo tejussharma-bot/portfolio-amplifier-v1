@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "npm --prefix backend install",
     "dev": "next dev -p 3001",
     "dev:backend": "npm --prefix backend run dev",
     "migrate:backend": "npm --prefix backend run migrate",
-    "build": "next build",
-    "start": "next start -p 3001",
+    "migrate": "npm --prefix backend run migrate",
+    "build": "node scripts/build.js",
+    "start": "node scripts/start.js",
     "start:backend": "npm --prefix backend start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
