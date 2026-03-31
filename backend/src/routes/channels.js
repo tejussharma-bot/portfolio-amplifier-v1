@@ -44,6 +44,33 @@ const setupGuides = {
   }
 };
 
+function buildFrontendUrl(pathname = "/dashboard/channels", searchParams = {}) {
+  const base = process.env.FRONTEND_URL || "http://localhost:3001";
+  const target = new URL(pathname, base);
+
+  Object.entries(searchParams).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).length > 0) {
+      target.searchParams.set(key, String(value));
+    }
+  });
+
+  return target.toString();
+}
+
+function normalizeReturnTo(value) {
+  const fallback = "/dashboard/channels";
+
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  if (!value.startsWith("/") || value.startsWith("//")) {
+    return fallback;
+  }
+
+  return value;
+}
+
 function signOAuthState(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "10m" });
 }
@@ -174,7 +201,8 @@ router.get("/:platform/connect-url", authenticateToken, async (req, res) => {
 
   const state = signOAuthState({
     userId: req.user.userId,
-    platform
+    platform,
+    returnTo: normalizeReturnTo(req.query.returnTo)
   });
 
   if (platform === "linkedin") {
@@ -223,7 +251,8 @@ router.get("/linkedin/connect", authenticateToken, (req, res) => {
 
   const state = signOAuthState({
     userId: req.user.userId,
-    platform: "linkedin"
+    platform: "linkedin",
+    returnTo: normalizeReturnTo(req.query.returnTo)
   });
 
   const params = new URLSearchParams({
@@ -240,10 +269,26 @@ router.get("/linkedin/connect", authenticateToken, (req, res) => {
 });
 
 router.get("/linkedin/callback", async (req, res) => {
-  const { code, state } = req.query;
+  const { code, state, error, error_description } = req.query;
+
+  if (error) {
+    return res.redirect(
+      buildFrontendUrl("/dashboard/channels", {
+        oauth: "error",
+        platform: "linkedin",
+        message: error_description || error
+      })
+    );
+  }
 
   if (!code || !state) {
-    return res.status(400).send("Missing OAuth code or state");
+    return res.redirect(
+      buildFrontendUrl("/dashboard/channels", {
+        oauth: "error",
+        platform: "linkedin",
+        message: "Missing OAuth code or state"
+      })
+    );
   }
 
   try {
@@ -279,9 +324,23 @@ router.get("/linkedin/callback", async (req, res) => {
       }
     });
 
-    return res.send("LinkedIn connected successfully. You can close this window.");
+    return res.redirect(
+      buildFrontendUrl(decoded.returnTo || "/dashboard/channels", {
+        oauth: "success",
+        platform: "linkedin"
+      })
+    );
   } catch (error) {
-    return res.status(500).send("LinkedIn connection failed");
+    return res.redirect(
+      buildFrontendUrl("/dashboard/channels", {
+        oauth: "error",
+        platform: "linkedin",
+        message:
+          error.response?.data?.error_description ||
+          error.response?.data?.message ||
+          "LinkedIn connection failed"
+      })
+    );
   }
 });
 
@@ -292,7 +351,8 @@ router.get("/dribbble/connect", authenticateToken, (req, res) => {
 
   const state = signOAuthState({
     userId: req.user.userId,
-    platform: "dribbble"
+    platform: "dribbble",
+    returnTo: normalizeReturnTo(req.query.returnTo)
   });
 
   const params = new URLSearchParams({
@@ -306,10 +366,26 @@ router.get("/dribbble/connect", authenticateToken, (req, res) => {
 });
 
 router.get("/dribbble/callback", async (req, res) => {
-  const { code, state } = req.query;
+  const { code, state, error, error_description } = req.query;
+
+  if (error) {
+    return res.redirect(
+      buildFrontendUrl("/dashboard/channels", {
+        oauth: "error",
+        platform: "dribbble",
+        message: error_description || error
+      })
+    );
+  }
 
   if (!code || !state) {
-    return res.status(400).send("Missing OAuth code or state");
+    return res.redirect(
+      buildFrontendUrl("/dashboard/channels", {
+        oauth: "error",
+        platform: "dribbble",
+        message: "Missing OAuth code or state"
+      })
+    );
   }
 
   try {
@@ -343,9 +419,23 @@ router.get("/dribbble/callback", async (req, res) => {
       expiresIn: tokenResponse.data.expires_in || null
     });
 
-    return res.send("Dribbble connected successfully. You can close this window.");
+    return res.redirect(
+      buildFrontendUrl(decoded.returnTo || "/dashboard/channels", {
+        oauth: "success",
+        platform: "dribbble"
+      })
+    );
   } catch (error) {
-    return res.status(500).send("Dribbble connection failed");
+    return res.redirect(
+      buildFrontendUrl("/dashboard/channels", {
+        oauth: "error",
+        platform: "dribbble",
+        message:
+          error.response?.data?.error_description ||
+          error.response?.data?.message ||
+          "Dribbble connection failed"
+      })
+    );
   }
 });
 

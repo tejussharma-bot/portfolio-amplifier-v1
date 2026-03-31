@@ -740,7 +740,13 @@ export function PublishStudioPage({
                       </p>
                     </div>
                     <Badge
-                      variant={selectedConnection.status === "Connected" ? "success" : "warning"}
+                      variant={
+                        selectedConnection.status === "Connected"
+                          ? "success"
+                          : selectedConnection.status === "Export mode"
+                            ? "info"
+                            : "warning"
+                      }
                     >
                       {selectedConnection.status}
                     </Badge>
@@ -764,7 +770,9 @@ export function PublishStudioPage({
                     )}
                     {selectedConnection.status === "Connected"
                       ? "Publish now"
-                      : `Open ${selectedRecommendation.label} setup / export`}
+                      : selectedConnection.status === "Not connected"
+                        ? `Connect ${selectedRecommendation.label}`
+                        : `Open ${selectedRecommendation.label} setup / export`}
                   </Button>
                   <Button variant="outline" className="w-full">
                     <CalendarClock className="h-4 w-4" />

@@ -214,8 +214,21 @@ export async function fetchChannelStatus(token: string) {
   return apiRequest<{ channels: any[] }>("/api/channels/status", { token });
 }
 
-export async function fetchConnectUrl(token: string, platform: "linkedin" | "dribbble") {
-  return apiRequest<{ url: string }>(`/api/channels/${platform}/connect-url`, { token });
+export async function fetchConnectUrl(
+  token: string,
+  platform: "linkedin" | "dribbble",
+  returnTo?: string
+) {
+  const params = new URLSearchParams();
+
+  if (returnTo) {
+    params.set("returnTo", returnTo);
+  }
+
+  return apiRequest<{ url: string }>(
+    `/api/channels/${platform}/connect-url${params.toString() ? `?${params.toString()}` : ""}`,
+    { token }
+  );
 }
 
 export async function fetchBehanceExportTemplate(token: string) {

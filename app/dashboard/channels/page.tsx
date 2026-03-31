@@ -30,6 +30,11 @@ export default function ChannelsPage() {
   const [channels, setChannels] = useState(channelConnections);
   const [behanceTemplate, setBehanceTemplate] = useState<any>(null);
   const [loadingPlatform, setLoadingPlatform] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{
+    tone: "success" | "error";
+    title: string;
+    body: string;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -65,16 +70,55 @@ export default function ChannelsPage() {
     };
   }, [isAuthenticated, token]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthState = params.get("oauth");
+    const platform = params.get("platform");
+    const message = params.get("message");
+
+    if (!oauthState || !platform) {
+      return;
+    }
+
+    const label = platform === "linkedin" ? "LinkedIn" : platform === "dribbble" ? "Dribbble" : platform;
+    setFeedback(
+      oauthState === "success"
+        ? {
+            tone: "success",
+            title: `${label} connected`,
+            body: "The account is now linked to this workspace and ready for the next publish step."
+          }
+        : {
+            tone: "error",
+            title: `${label} connection failed`,
+            body: message || "The provider did not complete the OAuth flow."
+          }
+    );
+
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete("oauth");
+    nextUrl.searchParams.delete("platform");
+    nextUrl.searchParams.delete("message");
+    window.history.replaceState({}, "", nextUrl.toString());
+  }, []);
+
   async function handleConnect(platform: "linkedin" | "dribbble") {
     if (!token || !isAuthenticated) {
       return;
     }
 
     setLoadingPlatform(platform);
+    setFeedback(null);
 
     try {
-      const result = await fetchConnectUrl(token, platform);
+      const result = await fetchConnectUrl(token, platform, "/dashboard/channels");
       window.location.href = result.url;
+    } catch (error: any) {
+      setFeedback({
+        tone: "error",
+        title: `Unable to start ${platform} connection`,
+        body: error?.message || "The account connection flow could not be started."
+      });
     } finally {
       setLoadingPlatform(null);
     }
@@ -93,6 +137,11 @@ export default function ChannelsPage() {
       await navigator.clipboard.writeText(
         `${result.template.title}\n\n${result.template.intro}\n\n${result.template.sections.join("\n")}`
       );
+      setFeedback({
+        tone: "success",
+        title: "Behance export template copied",
+        body: "V1 uses export mode here, so the template is ready for manual paste into Behance."
+      });
     } finally {
       setLoadingPlatform(null);
     }
@@ -121,6 +170,18 @@ export default function ChannelsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {feedback ? (
+              <div
+                className={`rounded-3xl border px-5 py-4 text-sm leading-7 ${
+                  feedback.tone === "success"
+                    ? "border-tide-200 bg-tide-50 text-tide-900"
+                    : "border-coral-200 bg-coral-50 text-coral-900"
+                }`}
+              >
+                <p className="font-semibold">{feedback.title}</p>
+                <p className="mt-1">{feedback.body}</p>
+              </div>
+            ) : null}
             {channels.map((channel) => (
               <div key={channel.id} className="rounded-3xl border border-border bg-white/85 p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -133,7 +194,9 @@ export default function ChannelsPage() {
                             ? "success"
                             : channel.status === "Needs reconnect"
                               ? "warning"
-                              : "info"
+                              : channel.status === "Not connected"
+                                ? "outline"
+                                : "info"
                         }
                       >
                         {channel.status}
@@ -188,10 +251,16 @@ export default function ChannelsPage() {
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : channel.status === "Connected" ? (
                         <Link2 className="h-4 w-4" />
-                      ) : (
+                      ) : channel.status === "Needs reconnect" ? (
                         <RefreshCw className="h-4 w-4" />
+                      ) : (
+                        <Link2 className="h-4 w-4" />
                       )}
-                      {channel.status === "Connected" ? "Manage connection" : "Reconnect account"}
+                      {channel.status === "Connected"
+                        ? "Manage connection"
+                        : channel.status === "Needs reconnect"
+                          ? "Reconnect account"
+                          : "Connect account"}
                     </button>
                   ) : (
                     <button

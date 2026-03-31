@@ -211,11 +211,13 @@ export default function DashboardPage() {
                         ? "success"
                         : channel.status === "Needs reconnect"
                           ? "danger"
-                          : "outline"
+                          : channel.status === "Not connected"
+                            ? "outline"
+                            : "outline"
                     }
                     className="rounded-md px-2 py-1 text-[10px] uppercase tracking-[0.16em]"
                   >
-                    {channel.status === "Export mode" ? "Offline" : channel.status}
+                    {channel.status === "Export mode" ? "Export" : channel.status}
                   </Badge>
                 </div>
               ))}

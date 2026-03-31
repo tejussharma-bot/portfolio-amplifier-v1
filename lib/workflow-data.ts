@@ -14,7 +14,7 @@ export interface PlatformRecommendation {
 export interface ChannelConnection {
   id: PlatformId;
   name: string;
-  status: "Connected" | "Needs reconnect" | "Export mode";
+  status: "Connected" | "Needs reconnect" | "Not connected" | "Export mode";
   description: string;
   permissions: string[];
   lastSync: string;
@@ -66,13 +66,14 @@ export const channelConnections: ChannelConnection[] = [
   {
     id: "linkedin",
     name: "LinkedIn",
-    status: "Connected",
+    status: "Not connected",
     description: "Primary authority channel for ROI-led project stories and discovery CTAs.",
     permissions: ["Sign In with LinkedIn", "Share on LinkedIn"],
-    lastSync: "March 29, 2026",
-    fallback: "Publish directly or save a manual copy if the token expires.",
+    lastSync: "Connect to enable direct publishing",
+    fallback: "Connect first, then publish directly from Publish Studio.",
     checklist: [
       "Keep the redirect URI aligned with the backend callback route.",
+      "Connect the LinkedIn account you want to publish from.",
       "Reconnect when the access token nears expiry.",
       "Use for business-impact angles and founder-facing copy."
     ]
@@ -94,12 +95,13 @@ export const channelConnections: ChannelConnection[] = [
   {
     id: "dribbble",
     name: "Dribbble",
-    status: "Needs reconnect",
+    status: "Not connected",
     description: "Visual-first teaser channel for polished hero shots and short captions.",
     permissions: ["Public profile", "Shot upload"],
-    lastSync: "Reconnect required before next publish",
-    fallback: "Copy shot caption and tags while OAuth is being restored.",
+    lastSync: "Connect to enable guided upload setup",
+    fallback: "Connect first, or copy shot caption and tags manually.",
     checklist: [
+      "Connect the Dribbble account you want to publish from.",
       "Reconnect OAuth before attempting direct publishing.",
       "Lead with one hero screen instead of a full narrative.",
       "Route traffic back to the hosted portfolio or Behance story."

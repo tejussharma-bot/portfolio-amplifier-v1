@@ -149,7 +149,19 @@ export function mergeChannelState(rows: any[]) {
     const live = rows.find((row) => row.platform === channel.id);
 
     if (!live) {
-      return channel;
+      if (channel.id === "behance") {
+        return channel;
+      }
+
+      return {
+        ...channel,
+        status: "Not connected",
+        lastSync: "Not connected yet",
+        fallback:
+          channel.id === "linkedin"
+            ? "Connect first to publish directly."
+            : "Connect first for guided upload support."
+      };
     }
 
     return {
