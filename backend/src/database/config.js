@@ -2,8 +2,20 @@ const { Pool } = require("pg");
 require("dotenv").config();
 const { isPlaceholderValue } = require("../utils/config");
 
+function getConfiguredConnectionString() {
+  const candidates = [
+    process.env.DATABASE_URL,
+    process.env.POSTGRES_URL,
+    process.env.POSTGRES_PRISMA_URL,
+    process.env.POSTGRES_URL_NON_POOLING
+  ];
+
+  return candidates.find((value) => value && !isPlaceholderValue(value)) || "";
+}
+
+const connectionString = getConfiguredConnectionString();
 const hasDatabaseUrl =
-  !!process.env.DATABASE_URL && !isPlaceholderValue(process.env.DATABASE_URL);
+  !!connectionString;
 
 const shouldUseSsl =
   process.env.DB_SSL === "true" ||
@@ -30,7 +42,7 @@ const pool = new Pool(
   hasDatabaseUrl
     ? {
         ...baseConfig,
-        connectionString: process.env.DATABASE_URL,
+        connectionString,
         ssl
       }
     : {
