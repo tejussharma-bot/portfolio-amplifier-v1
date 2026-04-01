@@ -6,7 +6,6 @@ const { put } = require("@vercel/blob");
 const { isPlaceholderValue } = require("../utils/config");
 
 const uploadDir = path.join(__dirname, "..", "..", "uploads");
-fs.mkdirSync(uploadDir, { recursive: true });
 
 let ensuredSupabaseBucket = null;
 
@@ -138,8 +137,15 @@ async function storeProjectAsset({ file, userId, projectId, index }) {
     };
   }
 
+  if (process.env.VERCEL) {
+    throw new Error(
+      "Upload storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY or BLOB_READ_WRITE_TOKEN."
+    );
+  }
+
   const localFileName = `${projectId}-${fileKey}`;
   const localPath = path.join(uploadDir, localFileName);
+  await fs.promises.mkdir(uploadDir, { recursive: true });
   await fs.promises.writeFile(localPath, file.buffer);
 
   return {
