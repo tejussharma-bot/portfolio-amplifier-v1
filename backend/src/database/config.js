@@ -13,13 +13,39 @@ function getConfiguredConnectionString() {
   return candidates.find((value) => value && !isPlaceholderValue(value)) || "";
 }
 
-const connectionString = getConfiguredConnectionString();
+function normalizeConnectionString(value, shouldUseSsl) {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    const url = new URL(value);
+
+    if (shouldUseSsl) {
+      // node-postgres gives query-string SSL params precedence over the ssl config object.
+      // For hosted Postgres URLs that ship with sslmode=require, switch to no-verify so
+      // the driver keeps TLS enabled without rejecting provider-managed/self-signed chains.
+      url.searchParams.set("sslmode", "no-verify");
+      url.searchParams.delete("sslcert");
+      url.searchParams.delete("sslkey");
+      url.searchParams.delete("sslrootcert");
+      url.searchParams.delete("sslpassword");
+    }
+
+    return url.toString();
+  } catch (_error) {
+    return value;
+  }
+}
+
+const rawConnectionString = getConfiguredConnectionString();
 const hasDatabaseUrl =
-  !!connectionString;
+  !!rawConnectionString;
 
 const shouldUseSsl =
   process.env.DB_SSL === "true" ||
   (hasDatabaseUrl && process.env.DB_SSL !== "false");
+const connectionString = normalizeConnectionString(rawConnectionString, shouldUseSsl);
 
 const ssl = shouldUseSsl ? { rejectUnauthorized: false } : undefined;
 const connectionTimeoutMillis = Number(process.env.DB_CONNECT_TIMEOUT_MS || 5000);
