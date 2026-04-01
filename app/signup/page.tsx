@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { ArrowRight, Chrome, Linkedin, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 
 import { PortfolioMark } from "@/components/brand/portfolio-mark";
 import { useAuth } from "@/components/providers/auth-provider";
-import { API_URL, ApiError } from "@/lib/api";
+import { API_URL, ApiError, fetchAuthProviders, type AuthProviders } from "@/lib/api";
 import { buttonStyles } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,39 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [providers, setProviders] = useState<AuthProviders>({
+    emailPassword: true,
+    google: false,
+    linkedin: false
+  });
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadProviders() {
+      try {
+        const result = await fetchAuthProviders();
+
+        if (active) {
+          setProviders(result.providers);
+        }
+      } catch (_error) {
+        if (active) {
+          setProviders({
+            emailPassword: true,
+            google: false,
+            linkedin: false
+          });
+        }
+      }
+    }
+
+    void loadProviders();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -156,24 +189,35 @@ export default function SignupPage() {
                   <Sparkles className="h-4 w-4" />
                   Try the guided demo
                 </button>
-                <button
-                  type="button"
-                  onClick={continueWithGoogle}
-                  className={buttonStyles({ variant: "outline", className: "w-full" })}
-                >
-                  <Chrome className="h-4 w-4" />
-                  Continue with Google
-                </button>
-                <button
-                  type="button"
-                  onClick={continueWithLinkedIn}
-                  className={buttonStyles({ variant: "outline", className: "w-full" })}
-                >
-                  <Linkedin className="h-4 w-4" />
-                  Continue with LinkedIn
-                </button>
+                {providers.google ? (
+                  <button
+                    type="button"
+                    onClick={continueWithGoogle}
+                    className={buttonStyles({ variant: "outline", className: "w-full" })}
+                  >
+                    <Chrome className="h-4 w-4" />
+                    Continue with Google
+                  </button>
+                ) : null}
+                {providers.linkedin ? (
+                  <button
+                    type="button"
+                    onClick={continueWithLinkedIn}
+                    className={buttonStyles({ variant: "outline", className: "w-full" })}
+                  >
+                    <Linkedin className="h-4 w-4" />
+                    Continue with LinkedIn
+                  </button>
+                ) : null}
               </div>
             </form>
+
+            {!providers.google && !providers.linkedin ? (
+              <p className="mt-4 text-xs leading-6 text-muted-foreground">
+                Social login is not configured on this environment yet. Email and password signup
+                is available.
+              </p>
+            ) : null}
 
             <div className="mt-6 rounded-3xl bg-muted/70 p-5">
               <div className="flex items-start gap-3">

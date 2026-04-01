@@ -5,7 +5,7 @@ const passport = require("passport");
 
 const { pool } = require("../database/config");
 const { authenticateToken, signToken } = require("../middleware/auth");
-const { hasConfiguredCredentials } = require("../utils/config");
+const { getAuthProviderStatus, hasConfiguredCredentials } = require("../utils/config");
 
 const router = express.Router();
 
@@ -44,6 +44,12 @@ function buildFrontendRedirect(pathname, token) {
   redirectUrl.searchParams.set("token", token);
   return redirectUrl.toString();
 }
+
+router.get("/providers", (_req, res) => {
+  return res.json({
+    providers: getAuthProviderStatus()
+  });
+});
 
 router.post("/register", async (req, res) => {
   const { email, password, full_name } = req.body;

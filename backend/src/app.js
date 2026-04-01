@@ -14,6 +14,7 @@ const ormRoutes = require("./routes/orm");
 const dashboardRoutes = require("./routes/dashboard");
 const settingsRoutes = require("./routes/settings");
 const { configurePassport } = require("./config/passport");
+const { query } = require("./database/config");
 
 configurePassport();
 
@@ -41,11 +42,37 @@ app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
-app.get(["/health", "/api/health"], (_, res) => {
+app.get(["/health", "/api/health"], (_req, res) => {
   res.json({
     status: "ok",
     service: "portfolio-ai-backend"
   });
+});
+
+app.get("/api/health/db", async (_req, res) => {
+  const startedAt = Date.now();
+
+  try {
+    await query("SELECT 1");
+
+    return res.json({
+      status: "ok",
+      service: "portfolio-ai-backend",
+      database: {
+        status: "ok",
+        latencyMs: Date.now() - startedAt
+      }
+    });
+  } catch (error) {
+    return res.status(503).json({
+      status: "error",
+      service: "portfolio-ai-backend",
+      database: {
+        status: "error",
+        message: error.message
+      }
+    });
+  }
 });
 
 app.use("/api/auth", authRoutes);

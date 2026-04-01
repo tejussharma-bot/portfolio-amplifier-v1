@@ -63,6 +63,12 @@ export interface SessionUser {
   industry?: string | null;
 }
 
+export interface AuthProviders {
+  emailPassword: boolean;
+  google: boolean;
+  linkedin: boolean;
+}
+
 export async function registerUser(payload: {
   email: string;
   password: string;
@@ -89,6 +95,10 @@ export async function loginUser(payload: { email: string; password: string }) {
 
 export async function fetchCurrentUser(token: string) {
   return apiRequest<{ user: SessionUser }>("/api/auth/me", { token });
+}
+
+export async function fetchAuthProviders() {
+  return apiRequest<{ providers: AuthProviders }>("/api/auth/providers");
 }
 
 export async function saveOnboarding(

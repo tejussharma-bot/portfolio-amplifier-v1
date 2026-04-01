@@ -39,7 +39,23 @@ function hasConfiguredCredentials(...values) {
   return values.every((value) => !isPlaceholderValue(value));
 }
 
+function getAuthProviderStatus() {
+  return {
+    emailPassword: true,
+    google: hasConfiguredCredentials(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    ),
+    linkedin: hasConfiguredCredentials(
+      process.env.LINKEDIN_CLIENT_ID,
+      process.env.LINKEDIN_CLIENT_SECRET,
+      process.env.LINKEDIN_AUTH_REDIRECT_URI
+    )
+  };
+}
+
 module.exports = {
+  getAuthProviderStatus,
   hasConfiguredCredentials,
   isPlaceholderValue
 };
