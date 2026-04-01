@@ -57,10 +57,10 @@ router.post("/register", async (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ error: "Email and password are required" });
   }
-
-  const client = await pool.connect();
+  let client;
 
   try {
+    client = await pool.connect();
     const passwordHash = await bcrypt.hash(password, 10);
     await client.query("BEGIN");
 
@@ -91,7 +91,9 @@ router.post("/register", async (req, res) => {
       token: signToken(user)
     });
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (client) {
+      await client.query("ROLLBACK");
+    }
 
     if (error.code === "23505") {
       return res.status(409).json({ error: "A user with this email already exists" });
@@ -99,7 +101,7 @@ router.post("/register", async (req, res) => {
 
     return res.status(500).json({ error: error.message });
   } finally {
-    client.release();
+    client?.release();
   }
 });
 
@@ -164,10 +166,10 @@ router.get("/google/callback", (req, res, next) => {
       if (error || !profile?.email) {
         return res.status(500).send("Google authentication failed");
       }
-
-      const client = await pool.connect();
+      let client;
 
       try {
+        client = await pool.connect();
         await client.query("BEGIN");
 
         let userResult = await client.query(
@@ -213,10 +215,12 @@ router.get("/google/callback", (req, res, next) => {
         const redirectTo = redirectState.redirectTo || "/dashboard";
         return res.redirect(buildFrontendRedirect(redirectTo, signToken(user)));
       } catch (dbError) {
-        await client.query("ROLLBACK");
+        if (client) {
+          await client.query("ROLLBACK");
+        }
         return res.status(500).send("Google authentication failed");
       } finally {
-        client.release();
+        client?.release();
       }
     }
   )(req, res, next);
@@ -260,10 +264,10 @@ router.get("/linkedin/callback", async (req, res) => {
   if (!code || !state) {
     return res.status(400).send("Missing LinkedIn OAuth code or state");
   }
-
-  const client = await pool.connect();
+  let client;
 
   try {
+    client = await pool.connect();
     const redirectState = decodeState(state);
     const tokenParams = new URLSearchParams({
       grant_type: "authorization_code",
@@ -355,10 +359,12 @@ router.get("/linkedin/callback", async (req, res) => {
       buildFrontendRedirect(redirectState.redirectTo || "/dashboard", signToken(user))
     );
   } catch (authError) {
-    await client.query("ROLLBACK");
+    if (client) {
+      await client.query("ROLLBACK");
+    }
     return res.status(500).send("LinkedIn authentication failed");
   } finally {
-    client.release();
+    client?.release();
   }
 });
 
@@ -389,10 +395,10 @@ router.post("/onboarding", authenticateToken, async (req, res) => {
     channels_used = [],
     first_goal
   } = req.body;
-
-  const client = await pool.connect();
+  let client;
 
   try {
+    client = await pool.connect();
     await client.query("BEGIN");
 
     await client.query(
@@ -445,10 +451,12 @@ router.post("/onboarding", authenticateToken, async (req, res) => {
       nextStep
     });
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (client) {
+      await client.query("ROLLBACK");
+    }
     return res.status(500).json({ error: error.message });
   } finally {
-    client.release();
+    client?.release();
   }
 });
 

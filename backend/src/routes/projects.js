@@ -149,10 +149,10 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
   if (!title) {
     return res.status(400).json({ error: "Project title is required" });
   }
-
-  const client = await pool.connect();
+  let client;
 
   try {
+    client = await pool.connect();
     await client.query("BEGIN");
 
     const projectResult = await client.query(
@@ -237,10 +237,12 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
       portfolioDraft
     });
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (client) {
+      await client.query("ROLLBACK");
+    }
     return res.status(500).json({ error: error.message });
   } finally {
-    client.release();
+    client?.release();
   }
 });
 
