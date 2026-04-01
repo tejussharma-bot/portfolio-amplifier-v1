@@ -1,5 +1,3 @@
-const fs = require("fs");
-const path = require("path");
 const express = require("express");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
@@ -8,9 +6,6 @@ const { pool } = require("../database/config");
 const { authenticateToken } = require("../middleware/auth");
 const { generatePortfolioDraft } = require("../services/ai");
 const { storeProjectAsset } = require("../services/storage");
-
-const uploadDir = path.join(__dirname, "..", "..", "uploads");
-fs.mkdirSync(uploadDir, { recursive: true });
 
 const upload = multer({
   storage: multer.memoryStorage(),
