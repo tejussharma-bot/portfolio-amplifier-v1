@@ -15,6 +15,7 @@ const dashboardRoutes = require("./routes/dashboard");
 const settingsRoutes = require("./routes/settings");
 const { configurePassport } = require("./config/passport");
 const { query } = require("./database/config");
+const { ensureSchema } = require("./database/ensure-schema");
 
 configurePassport();
 
@@ -72,6 +73,15 @@ app.get("/api/health/db", async (_req, res) => {
         message: error.message
       }
     });
+  }
+});
+
+app.use("/api", async (req, res, next) => {
+  try {
+    await ensureSchema();
+    return next();
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 });
 
