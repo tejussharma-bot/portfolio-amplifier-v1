@@ -22,7 +22,7 @@ Onboard -> Create Project -> Build Portfolio -> Run Analysis -> Generate Platfor
 - Backend: Node.js + Express + PostgreSQL
 - Auth: Email/password + Google OAuth scaffold
 - Publishing: LinkedIn + Dribbble OAuth scaffolds, Behance export-first workflow
-- AI layer: Mock-first content and analysis services with external AI hooks ready
+- AI layer: Mock-first content and analysis services with optional external AI hooks
 
 ## App Sections
 
@@ -70,6 +70,11 @@ NEXT_PUBLIC_APP_URL=http://localhost:3001
 NEXT_PUBLIC_API_URL=http://localhost:3000
 ```
 
+Production note:
+
+- In Vercel production, leave `NEXT_PUBLIC_API_URL` unset so the frontend calls the same-domain
+  `/api/*` routes mounted inside the Next.js deployment.
+
 Backend example: [E:\GPT Builder\backend\.env.example](E:/GPT%20Builder/backend/.env.example)
 
 Core backend variables:
@@ -94,13 +99,19 @@ Core backend variables:
 - `DRIBBBLE_CLIENT_ID`
 - `DRIBBBLE_CLIENT_SECRET`
 - `DRIBBBLE_REDIRECT_URI`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_STORAGE_BUCKET`
 - `BLOB_READ_WRITE_TOKEN`
 - `AI_SERVICE_URL`
 - `AI_API_KEY`
 
 Supabase note:
 
-- For Render or other IPv4-only environments, use the Supabase Session Pooler connection string for `DATABASE_URL` instead of the direct `db.<project-ref>.supabase.co:5432` host.
+- On Vercel, use the Supabase pooler connection string for `DATABASE_URL` instead of the direct
+  `db.<project-ref>.supabase.co:5432` host.
+- For persistent free uploads, prefer Supabase Storage over local `/uploads`.
+- Leave `AI_API_KEY` unset if you want the backend to stay on the free deterministic fallback.
 
 ## API Surface
 
@@ -127,25 +138,23 @@ The frontend supports a seeded demo experience. If a user enters through the dem
 
 This makes the app easy to preview on Vercel even before the Express backend is hosted separately.
 
-## Vercel Note
+## Deployment Note
 
 This repository is split into:
 
 - a Next.js frontend at the repo root
 - an Express/PostgreSQL backend under `backend/`
 
-The Vercel deployment is best used for the frontend experience. For full live auth, project persistence, publishing, and ORM APIs, host the backend separately and set:
-
-```ini
-NEXT_PUBLIC_API_URL=https://your-backend-url
-```
+The Express backend is mounted inside the same Vercel-hosted Next.js deployment through
+`pages/api/[...path].js`, which keeps browser requests same-origin and avoids a separate public API
+domain for the core `/api/*` routes.
 
 Recommended production wiring:
 
-- Frontend on Vercel
-- Backend on Render
+- One Vercel project for both frontend and API
 - PostgreSQL on Supabase via `DATABASE_URL`
-- File uploads on Vercel Blob via `BLOB_READ_WRITE_TOKEN`
+- Supabase Storage for uploads
+- Optional external AI later, but deterministic fallback works for a fully free setup
 
 Without a hosted backend, the public deploy still supports the demo path and seeded product walkthrough.
 

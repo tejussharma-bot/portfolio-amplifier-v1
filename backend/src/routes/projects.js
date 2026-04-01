@@ -2,13 +2,12 @@ const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const multer = require("multer");
-const { put } = require("@vercel/blob");
 const { v4: uuidv4 } = require("uuid");
 
 const { pool } = require("../database/config");
 const { authenticateToken } = require("../middleware/auth");
 const { generatePortfolioDraft } = require("../services/ai");
-const { isPlaceholderValue } = require("../utils/config");
+const { storeProjectAsset } = require("../services/storage");
 
 const uploadDir = path.join(__dirname, "..", "..", "uploads");
 fs.mkdirSync(uploadDir, { recursive: true });
@@ -47,58 +46,6 @@ function slugify(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-}
-
-function sanitizeFileName(value) {
-  return String(value || "asset")
-    .toLowerCase()
-    .replace(/[^a-z0-9.-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function isBlobConfigured() {
-  return (
-    !!process.env.BLOB_READ_WRITE_TOKEN &&
-    !isPlaceholderValue(process.env.BLOB_READ_WRITE_TOKEN)
-  );
-}
-
-async function storeProjectAsset({ file, userId, projectId, index }) {
-  const safeName = sanitizeFileName(file.originalname || `asset-${index + 1}`);
-  const fileKey = `${Date.now()}-${index + 1}-${safeName}`;
-
-  if (isBlobConfigured()) {
-    const blob = await put(`projects/${userId}/${projectId}/${fileKey}`, file.buffer, {
-      access: "public",
-      addRandomSuffix: true,
-      contentType: file.mimetype,
-      token: process.env.BLOB_READ_WRITE_TOKEN
-    });
-
-    return {
-      storage: "blob",
-      originalName: file.originalname,
-      pathname: blob.pathname,
-      url: blob.url,
-      downloadUrl: blob.downloadUrl,
-      mimetype: file.mimetype,
-      size: file.size
-    };
-  }
-
-  const localFileName = `${projectId}-${fileKey}`;
-  const localPath = path.join(uploadDir, localFileName);
-  await fs.promises.writeFile(localPath, file.buffer);
-
-  return {
-    storage: "local",
-    originalName: file.originalname,
-    path: `/uploads/${localFileName}`,
-    url: `/uploads/${localFileName}`,
-    mimetype: file.mimetype,
-    size: file.size
-  };
 }
 
 async function getOwnedProject(projectId, userId) {

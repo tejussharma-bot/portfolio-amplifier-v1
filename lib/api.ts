@@ -1,11 +1,6 @@
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
-const productionFallbackApiUrl = "https://portfolio-amplifier-v1.onrender.com";
 
-export const API_URL =
-  configuredApiUrl ||
-  (process.env.NODE_ENV === "production"
-    ? productionFallbackApiUrl
-    : "http://localhost:3000");
+export const API_URL = configuredApiUrl || "";
 
 export class ApiError extends Error {
   status: number;
