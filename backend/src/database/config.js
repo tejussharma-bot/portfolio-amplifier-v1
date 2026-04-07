@@ -92,6 +92,11 @@ const shouldUseInMemoryDb =
     !process.env.VERCEL &&
     ["localhost", "127.0.0.1", "::1", ""].includes(String(process.env.DB_HOST || "localhost")));
 
+// Fail fast in production if no database configured
+if (!hasDatabaseUrl && process.env.NODE_ENV === 'production' && !shouldUseInMemoryDb) {
+  throw new Error('DATABASE_URL is required in production. Configure a PostgreSQL database connection.');
+}
+
 const pool = shouldUseInMemoryDb
   ? createInMemoryPool()
   : new Pool(

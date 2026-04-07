@@ -84,6 +84,11 @@ function buildExportPayload(draft, project) {
 }
 
 async function publishToLinkedIn({ accessToken, personId, text }) {
+  // Validate personId format (should be numeric)
+  if (!personId || !/^\d+$/.test(String(personId))) {
+    throw new Error("Invalid LinkedIn person ID format");
+  }
+
   const response = await axios.post(
     "https://api.linkedin.com/v2/ugcPosts",
     {
@@ -341,7 +346,7 @@ router.post("/drafts/:draftId/publish", async (req, res) => {
 
     if (draft.platform === "linkedin") {
       const channelResult = await pool.query(
-        `SELECT platform_user_id, access_token, is_active, metadata
+        `SELECT platform_user_id, access_token, token_expires_at, is_active, metadata
          FROM user_channels
          WHERE user_id = $1 AND platform = 'linkedin'
          LIMIT 1`,
@@ -354,6 +359,14 @@ router.post("/drafts/:draftId/publish", async (req, res) => {
         return res.status(409).json({
           error: "LinkedIn must be connected before direct publishing",
           mode: "connect-required"
+        });
+      }
+
+      // Check if token is expired
+      if (channel.token_expires_at && new Date(channel.token_expires_at) <= new Date()) {
+        return res.status(401).json({
+          error: "LinkedIn token has expired. Please reconnect your LinkedIn account.",
+          mode: "token-expired"
         });
       }
 

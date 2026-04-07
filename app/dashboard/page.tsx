@@ -61,16 +61,20 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<DashboardProject[]>(seedProjects as DashboardProject[]);
   const [reviews, setReviews] = useState<DashboardReview[]>(seedReviews as DashboardReview[]);
   const [channelStatus, setChannelStatus] = useState(mergeChannelState([]));
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
 
     async function loadWorkspace() {
       if (!token || !isAuthenticated) {
+        setLoading(false);
         return;
       }
 
       try {
+        setError(null);
         const [projectResult, reviewResult, channelResult] = await Promise.all([
           fetchProjects(token),
           fetchReviews(token),
@@ -87,6 +91,13 @@ export default function DashboardPage() {
       } catch (error) {
         if (!active) {
           return;
+        }
+        console.error("Failed to load dashboard data:", error);
+        setError("Failed to load dashboard data. Please refresh the page.");
+        // Keep seed data as fallback
+      } finally {
+        if (active) {
+          setLoading(false);
         }
       }
     }
@@ -141,6 +152,12 @@ export default function DashboardPage() {
         </Link>
       </header>
 
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-red-800">{error}</p>
+        </div>
+      )}
+
       <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4">
@@ -155,7 +172,20 @@ export default function DashboardPage() {
             </Link>
           </CardHeader>
           <CardContent className="space-y-6">
-            {heroProjects.map((project) => (
+            {loading ? (
+              <div className="space-y-6">
+                {[1, 2].map((i) => (
+                  <div key={i} className="flex items-center gap-5 rounded-[1.5rem] p-4">
+                    <div className="h-20 w-20 animate-pulse rounded-[1rem] bg-surface-container-low" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-5 animate-pulse rounded bg-surface-container-low" />
+                      <div className="h-4 w-3/4 animate-pulse rounded bg-surface-container-low" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : heroProjects.length > 0 ? (
+              heroProjects.map((project) => (
               <div
                 key={project.id}
                 className="group flex items-center gap-5 rounded-[1.5rem] p-4 transition hover:bg-surface-container-low"
@@ -181,7 +211,12 @@ export default function DashboardPage() {
                 </div>
                 <ArrowRight className="h-5 w-5 text-outline transition group-hover:text-primary" />
               </div>
-            ))}
+            ))
+            ) : (
+              <div className="py-8 text-center text-on-surface-variant">
+                <p>No projects yet. Create your first project to get started!</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -315,31 +350,37 @@ export default function DashboardPage() {
             </button>
           </CardHeader>
           <CardContent className="space-y-4">
-            {pendingReviews.slice(0, 2).map((review) => (
-              <div
-                key={review.id}
-                className="rounded-[1.5rem] p-4 transition hover:bg-surface-container-low"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-fixed text-xs font-bold text-primary">
-                    {review.client
-                      .split(" ")
-                      .slice(0, 2)
-                      .map((part: string) => part[0])
-                      .join("")}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between gap-3">
-                      <h4 className="text-sm font-bold text-on-surface">{review.client}</h4>
-                      <span className="text-[11px] text-on-surface-variant">{review.submittedAt}</span>
+            {pendingReviews.length > 0 ? (
+              pendingReviews.slice(0, 2).map((review) => (
+                <div
+                  key={review.id}
+                  className="rounded-[1.5rem] p-4 transition hover:bg-surface-container-low"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-fixed text-xs font-bold text-primary">
+                      {review.client
+                        .split(" ")
+                        .slice(0, 2)
+                        .map((part: string) => part[0])
+                        .join("")}
                     </div>
-                    <p className="mt-2 text-xs italic leading-6 text-on-surface-variant">
-                      &quot;{review.content}&quot;
-                    </p>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <h4 className="text-sm font-bold text-on-surface">{review.client}</h4>
+                        <span className="text-[11px] text-on-surface-variant">{review.submittedAt}</span>
+                      </div>
+                      <p className="mt-2 text-xs italic leading-6 text-on-surface-variant">
+                        &quot;{review.content}&quot;
+                      </p>
+                    </div>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="py-8 text-center text-on-surface-variant">
+                <p>No pending reviews. Import reviews to get started!</p>
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
       </section>

@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const bcrypt = require("bcryptjs");
 const passport = require("passport");
+const rateLimit = require("express-rate-limit");
 
 const { pool } = require("../database/config");
 const { authenticateToken, signToken } = require("../middleware/auth");
@@ -12,6 +13,17 @@ const {
 } = require("../utils/config");
 
 const router = express.Router();
+
+// Rate limiting for login attempts
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per window
+  message: {
+    error: "Too many login attempts. Please try again in 15 minutes."
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 function serializeUser(row) {
   return {
@@ -44,7 +56,21 @@ function getRequestOrigin(req) {
   const forwardedHost = req.headers["x-forwarded-host"];
   const host = forwardedHost || req.headers.host;
 
+  // Allowed hosts for security
+  const allowedHosts = (process.env.ALLOWED_HOSTS || "localhost:3000,localhost:3001,portfolio-amplifier-v1.vercel.app")
+    .split(",")
+    .map(h => h.trim().toLowerCase());
+
   if (host) {
+    const hostLower = host.toLowerCase();
+    const isAllowed = allowedHosts.some(allowed => 
+      hostLower === allowed || hostLower.endsWith('.' + allowed)
+    );
+
+    if (!isAllowed) {
+      throw new Error(`Host ${host} is not allowed`);
+    }
+
     const proto = forwardedProto || (process.env.VERCEL ? "https" : req.protocol || "http");
     return `${proto}://${host}`;
   }
@@ -124,7 +150,7 @@ router.post("/register", async (req, res) => {
   }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -184,7 +210,11 @@ router.get("/google/callback", (req, res, next) => {
     { session: false },
     async (error, profile) => {
       if (error || !profile?.email) {
-        return res.status(500).send("Google authentication failed");
+        console.error("Google OAuth error:", error);
+        return res.status(401).json({ 
+          error: "Google authentication failed",
+          detail: error?.message || "Profile missing email"
+        });
       }
       let client;
 
@@ -276,11 +306,15 @@ router.get("/linkedin/callback", async (req, res) => {
   const clientSecret = cleanEnvValue(process.env.LINKEDIN_CLIENT_SECRET);
 
   if (error) {
-    return res.status(500).send(error_description || "LinkedIn authentication failed");
+    console.error("LinkedIn OAuth error:", error_description);
+    return res.status(401).json({ 
+      error: "LinkedIn authentication failed",
+      detail: error_description || error
+    });
   }
 
   if (!code || !state) {
-    return res.status(400).send("Missing LinkedIn OAuth code or state");
+    return res.status(400).json({ error: "Missing LinkedIn OAuth code or state" });
   }
   let client;
 
@@ -295,21 +329,39 @@ router.get("/linkedin/callback", async (req, res) => {
       client_secret: clientSecret
     });
 
-    const tokenResponse = await axios.post(
-      "https://www.linkedin.com/oauth/v2/accessToken",
-      tokenParams.toString(),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
+    let tokenResponse;
+    try {
+      tokenResponse = await axios.post(
+        "https://www.linkedin.com/oauth/v2/accessToken",
+        tokenParams.toString(),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+          }
         }
-      }
-    );
+      );
+    } catch (axiosError) {
+      console.error("LinkedIn token exchange failed:", axiosError.response?.data || axiosError.message);
+      return res.status(400).json({ 
+        error: "Failed to authenticate with LinkedIn",
+        detail: "Token exchange failed"
+      });
+    }
 
-    const userInfoResponse = await axios.get("https://api.linkedin.com/v2/userinfo", {
-      headers: {
-        Authorization: `Bearer ${tokenResponse.data.access_token}`
-      }
-    });
+    let userInfoResponse;
+    try {
+      userInfoResponse = await axios.get("https://api.linkedin.com/v2/userinfo", {
+        headers: {
+          Authorization: `Bearer ${tokenResponse.data.access_token}`
+        }
+      });
+    } catch (axiosError) {
+      console.error("LinkedIn user info fetch failed:", axiosError.response?.data || axiosError.message);
+      return res.status(400).json({ 
+        error: "Failed to get LinkedIn user information",
+        detail: "User info request failed"
+      });
+    }
 
     const linkedinProfile = userInfoResponse.data;
 

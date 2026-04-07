@@ -100,10 +100,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="mt-6 rounded-[1.5rem] bg-primary-fixed p-4">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Pro plan</p>
-          <p className="mt-1 text-[11px] text-primary/65">85% of storage used</p>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Free plan</p>
+          <p className="mt-1 text-[11px] text-primary/65">Upgrade for unlimited storage</p>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/50">
-            <div className="h-full w-[85%] rounded-full bg-[linear-gradient(135deg,#1c32df_0%,#3e51f7_100%)]" />
+            <div className="h-full w-[25%] rounded-full bg-[linear-gradient(135deg,#1c32df_0%,#3e51f7_100%)]" />
           </div>
         </div>
       </aside>

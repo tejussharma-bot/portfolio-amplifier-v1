@@ -1,4 +1,10 @@
 const jwt = require("jsonwebtoken");
+const { isPlaceholderValue } = require("../utils/config");
+
+// Validate JWT_SECRET at module load time
+if (!process.env.JWT_SECRET || isPlaceholderValue(process.env.JWT_SECRET)) {
+  throw new Error("JWT_SECRET is not configured. Please set a secure JWT secret in environment variables.");
+}
 
 function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization || "";
