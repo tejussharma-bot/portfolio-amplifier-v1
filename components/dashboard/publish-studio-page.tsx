@@ -7,11 +7,15 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Image as ImageIcon,
   Linkedin,
   Loader2,
   Palette,
   Send,
-  Sparkles
+  Sparkles,
+  Wand2,
+  Download,
+  Share2
 } from "lucide-react";
 
 import { useAuth } from "@/components/providers/auth-provider";
@@ -20,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   analyzeProject,
   exportGeneratedDraft,
@@ -29,6 +34,9 @@ import {
   fetchProjectDetail,
   fetchProjects,
   generateContent,
+  generateImagePrompt,
+  generateSocialContent,
+  generateText,
   publishGeneratedDraft,
   scheduleGeneratedDraft,
   updateGeneratedDraft
@@ -128,6 +136,10 @@ export function PublishStudioPage({
   const [publishing, setPublishing] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const [exportingDraft, setExportingDraft] = useState(false);
+  const [generatingSocialContent, setGeneratingSocialContent] = useState(false);
+  const [generatingImagePrompt, setGeneratingImagePrompt] = useState(false);
+  const [socialContent, setSocialContent] = useState<string>("");
+  const [imagePrompt, setImagePrompt] = useState<string>("");
 
   function toStudioProject(project: any): StudioProject {
     const normalized = normalizeProjectRow(project);
@@ -334,6 +346,65 @@ export function PublishStudioPage({
       setSelectedChannelId(platform);
     } finally {
       setGeneratingDraft(false);
+    }
+  }
+
+  async function handleGenerateSocialContent() {
+    if (!selectedProjectId || !token || !isAuthenticated) {
+      return;
+    }
+
+    setGeneratingSocialContent(true);
+
+    try {
+      const result = await generateSocialContent(token, {
+        projectId: selectedProjectId,
+        platform: selectedChannelId || "linkedin",
+        tone
+      });
+      setSocialContent(result.content || "");
+      setActionFeedback({
+        tone: "success",
+        title: "Social content generated",
+        body: "AI-powered content ideas are ready for the selected platform."
+      });
+    } catch (error) {
+      setActionFeedback({
+        tone: "error",
+        title: "Generation failed",
+        body: error instanceof Error ? error.message : "Could not generate content"
+      });
+    } finally {
+      setGeneratingSocialContent(false);
+    }
+  }
+
+  async function handleGenerateImagePrompt() {
+    if (!selectedProjectId || !token || !isAuthenticated) {
+      return;
+    }
+
+    setGeneratingImagePrompt(true);
+
+    try {
+      const result = await generateImagePrompt(token, {
+        projectId: selectedProjectId,
+        style: "professional"
+      });
+      setImagePrompt(result.prompt || "");
+      setActionFeedback({
+        tone: "success",
+        title: "Image prompt generated",
+        body: "Use this prompt with image generation (DALL-E, Midjourney, etc.)"
+      });
+    } catch (error) {
+      setActionFeedback({
+        tone: "error",
+        title: "Generation failed",
+        body: error instanceof Error ? error.message : "Could not generate prompt"
+      });
+    } finally {
+      setGeneratingImagePrompt(false);
     }
   }
 
@@ -916,10 +987,75 @@ export function PublishStudioPage({
                   )}
                   Regenerate
                 </Button>
-                <Button variant="outline">Shorten</Button>
-                <Button variant="outline">Make more credible</Button>
-                <Button variant="outline">Make more founder-led</Button>
+                <Button
+                  variant="outline"
+                  onClick={handleGenerateSocialContent}
+                  disabled={generatingSocialContent}
+                >
+                  {generatingSocialContent ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-4 w-4" />
+                  )}
+                  AI Social Ideas
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleGenerateImagePrompt}
+                  disabled={generatingImagePrompt}
+                >
+                  {generatingImagePrompt ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4" />
+                  )}
+                  Generate Image Prompt
+                </Button>
               </div>
+
+              {socialContent && (
+                <div className="rounded-3xl border border-tide-200 bg-tide-50 p-5">
+                  <p className="kicker">AI-Generated Social Content</p>
+                  <div className="mt-3 max-h-[200px] overflow-y-auto whitespace-pre-wrap rounded-2xl bg-white p-4 text-sm leading-6">
+                    {socialContent}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => {
+                      navigator.clipboard.writeText(socialContent);
+                      setCopied("social");
+                      setTimeout(() => setCopied(null), 2000);
+                    }}
+                  >
+                    {copied === "social" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    Copy
+                  </Button>
+                </div>
+              )}
+
+              {imagePrompt && (
+                <div className="rounded-3xl border border-sand-200 bg-sand-50 p-5">
+                  <p className="kicker">Image Generation Prompt</p>
+                  <div className="mt-3 max-h-[200px] overflow-y-auto whitespace-pre-wrap rounded-2xl bg-white p-4 text-sm leading-6">
+                    {imagePrompt}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => {
+                      navigator.clipboard.writeText(imagePrompt);
+                      setCopied("image");
+                      setTimeout(() => setCopied(null), 2000);
+                    }}
+                  >
+                    {copied === "image" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    Copy Prompt
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 

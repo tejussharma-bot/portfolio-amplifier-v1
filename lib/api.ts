@@ -126,13 +126,16 @@ export async function fetchProjectDetail(token: string, projectId: string) {
   );
 }
 
-export async function createProject(token: string, formData: FormData) {
+export async function createProject(token: string, payload: any) {
   return apiRequest<{ project: any; portfolioDraft: any; analysis?: any | null; buildStatus?: any | null }>(
     "/api/projects",
     {
       method: "POST",
       token,
-      body: formData
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
     }
   );
 }
@@ -316,4 +319,60 @@ export async function fetchConnectUrl(
 
 export async function fetchBehanceExportTemplate(token: string) {
   return apiRequest<any>("/api/channels/behance/export-template", { token });
+}
+
+export async function generateSocialContent(
+  token: string,
+  payload: {
+    projectId: string;
+    platform: string;
+    tone?: string;
+  }
+) {
+  return apiRequest<{ content: string }>("/api/amplify/generate-social-content", {
+    method: "POST",
+    token,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function generateImagePrompt(
+  token: string,
+  payload: {
+    projectId: string;
+    style?: string;
+  }
+) {
+  return apiRequest<{ prompt: string }>("/api/amplify/generate-image-prompt", {
+    method: "POST",
+    token,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function generateText(
+  token: string,
+  payload: {
+    systemPrompt: string;
+    userPrompt: string;
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+    };
+  }
+) {
+  return apiRequest<{ text: string }>("/api/amplify/generate-text", {
+    method: "POST",
+    token,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
 }

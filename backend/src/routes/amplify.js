@@ -3,7 +3,7 @@ const axios = require("axios");
 
 const { pool } = require("../database/config");
 const { authenticateToken } = require("../middleware/auth");
-const { analyzeProjectFit, generateChannelDraft } = require("../services/ai");
+const { analyzeProjectFit, generateChannelDraft, generateImagePrompt, generateSocialContent, requestText } = require("../services/ai");
 
 const router = express.Router();
 
@@ -440,6 +440,66 @@ router.post("/drafts/:draftId/publish", async (req, res) => {
     return res.status(502).json({
       error: `Publish failed: ${providerMessage}`
     });
+  }
+});
+
+router.post("/generate-social-content", async (req, res) => {
+  const { projectId, platform, tone = "professional" } = req.body;
+
+  if (!projectId || !platform) {
+    return res.status(400).json({ error: "projectId and platform are required" });
+  }
+
+  try {
+    const project = await getOwnedProject(projectId, req.user.userId);
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    const content = await generateSocialContent(project, platform, tone);
+
+    return res.json({ content });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+router.post("/generate-image-prompt", async (req, res) => {
+  const { projectId, style = "professional" } = req.body;
+
+  if (!projectId) {
+    return res.status(400).json({ error: "projectId is required" });
+  }
+
+  try {
+    const project = await getOwnedProject(projectId, req.user.userId);
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    const prompt = await generateImagePrompt(project, style);
+
+    return res.json({ prompt });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+router.post("/generate-text", async (req, res) => {
+  const { systemPrompt, userPrompt, options = {} } = req.body;
+
+  if (!systemPrompt || !userPrompt) {
+    return res.status(400).json({ error: "systemPrompt and userPrompt are required" });
+  }
+
+  try {
+    const text = await requestText(systemPrompt, userPrompt, options);
+
+    return res.json({ text });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 });
 

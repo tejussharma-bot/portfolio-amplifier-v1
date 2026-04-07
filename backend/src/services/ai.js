@@ -1,13 +1,49 @@
 const axios = require("axios");
 const { isPlaceholderValue } = require("../utils/config");
 
+function detectAIService() {
+  const apiKey = process.env.AI_API_KEY;
+  const serviceUrl = process.env.AI_SERVICE_URL;
+
+  if (!apiKey || isPlaceholderValue(apiKey)) {
+    return null;
+  }
+
+  // Detect Claude/Anthropic
+  if (serviceUrl?.includes('anthropic.com') || apiKey.startsWith('sk-ant-')) {
+    return 'claude';
+  }
+
+  // Detect OpenAI
+  if (serviceUrl?.includes('openai.com') || apiKey.startsWith('sk-')) {
+    return 'openai';
+  }
+
+  // Default to OpenAI format
+  return 'openai';
+}
+
 function buildRemoteClient() {
-  if (isPlaceholderValue(process.env.AI_API_KEY)) {
+  const service = detectAIService();
+  if (!service) {
     return null;
   }
 
   const baseURL = process.env.AI_SERVICE_URL || "https://api.openai.com/v1";
 
+  if (service === 'claude') {
+    return axios.create({
+      baseURL: baseURL || "https://api.anthropic.com/v1",
+      headers: {
+        "x-api-key": process.env.AI_API_KEY,
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01"
+      },
+      timeout: 30000
+    });
+  }
+
+  // OpenAI format
   return axios.create({
     baseURL,
     headers: {
@@ -20,27 +56,190 @@ function buildRemoteClient() {
 
 async function requestJson(systemPrompt, userPrompt) {
   const client = buildRemoteClient();
+  const service = detectAIService();
 
-  if (!client) {
+  if (!client || !service) {
     return null;
   }
 
   try {
-    const response = await client.post("/chat/completions", {
-      model: process.env.AI_MODEL || "gpt-4o-mini",
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ]
-    });
+    if (service === 'claude') {
+      const response = await client.post("/messages", {
+        model: process.env.AI_MODEL || "claude-3-sonnet-20240229",
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [
+          { role: "user", content: userPrompt }
+        ]
+      });
 
-    const content = response.data?.choices?.[0]?.message?.content;
-    return content ? JSON.parse(content) : null;
+      const content = response.data?.content?.[0]?.text;
+      return content ? JSON.parse(content) : null;
+    } else {
+      // OpenAI format
+      const response = await client.post("/chat/completions", {
+        model: process.env.AI_MODEL || "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ]
+      });
+
+      const content = response.data?.choices?.[0]?.message?.content;
+      return content ? JSON.parse(content) : null;
+    }
   } catch (error) {
-    console.warn("Remote AI request failed, falling back to deterministic generator.");
+    console.warn("Remote AI request failed, falling back to deterministic generator.", error.message);
     return null;
   }
+}
+
+async function requestText(systemPrompt, userPrompt, options = {}) {
+  const client = buildRemoteClient();
+  const service = detectAIService();
+
+  if (!client || !service) {
+    return null;
+  }
+
+  try {
+    if (service === 'claude') {
+      const response = await client.post("/messages", {
+        model: options.model || process.env.AI_MODEL || "claude-3-sonnet-20240229",
+        max_tokens: options.maxTokens || 2048,
+        system: systemPrompt,
+        messages: [
+          { role: "user", content: userPrompt }
+        ],
+        temperature: options.temperature || 0.7
+      });
+
+      return response.data?.content?.[0]?.text || null;
+    } else {
+      // OpenAI format
+      const response = await client.post("/chat/completions", {
+        model: options.model || process.env.AI_MODEL || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: options.temperature || 0.7,
+        max_tokens: options.maxTokens || 2048
+      });
+
+      return response.data?.choices?.[0]?.message?.content || null;
+    }
+  } catch (error) {
+    console.warn("AI text generation failed:", error.message);
+    return null;
+  }
+}
+
+async function generateImage(prompt, options = {}) {
+  const service = detectAIService();
+
+  if (service === 'openai' || !process.env.AI_SERVICE_URL?.includes('anthropic')) {
+    // Use OpenAI DALL-E for image generation
+    const client = axios.create({
+      baseURL: "https://api.openai.com/v1",
+      headers: {
+        Authorization: `Bearer ${process.env.AI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      timeout: 30000
+    });
+
+    try {
+      const response = await client.post("/images/generations", {
+        model: "dall-e-3",
+        prompt: prompt,
+        size: options.size || "1024x1024",
+        quality: options.quality || "standard",
+        n: 1
+      });
+
+      return response.data?.data?.[0]?.url || null;
+    } catch (error) {
+      console.warn("Image generation failed:", error.message);
+      return null;
+    }
+  }
+
+  // For Claude, we'll use text-to-image via another service or fallback
+  console.warn("Image generation not supported for Claude API yet");
+  return null;
+}
+
+async function generateSocialContent(projectData, platform, tone = "professional") {
+  const systemPrompt = `You are a social media content strategist specializing in portfolio case studies.
+Create engaging ${platform} content that showcases project achievements and attracts potential clients.
+
+Platform guidelines:
+- LinkedIn: Professional, detailed, B2B focused
+- Twitter/X: Concise, punchy, engaging
+- Instagram: Visual, story-driven, emotive
+- Behance: Creative, process-focused, visual
+
+Always include:
+- Hook/attention grabber
+- Key challenge solved
+- Main results/impact
+- Call to action
+- Relevant hashtags
+
+Keep content authentic and results-focused.`;
+
+  const userPrompt = `Generate ${platform} content for this project:
+
+Project: ${projectData.title}
+Client: ${projectData.client_name}
+Challenge: ${projectData.challenge_text}
+Solution: ${projectData.solution_text}
+Results: ${projectData.results_text}
+Deliverables: ${projectData.deliverables?.join(", ") || "Multiple deliverables"}
+Tone: ${tone}
+
+Create a compelling post that would convert viewers into leads.`;
+
+  return await requestText(systemPrompt, userPrompt, {
+    temperature: 0.8,
+    maxTokens: 1000
+  });
+}
+
+async function generateImagePrompt(projectData, style = "professional") {
+  const systemPrompt = `You are a visual content strategist. Create detailed, professional image generation prompts for portfolio case studies.
+
+Focus on:
+- Clean, modern design aesthetics
+- Professional color palettes
+- Clear visual hierarchy
+- Brand-appropriate styling
+- High-quality, commercial feel
+
+Style guidelines:
+- Professional: Clean, corporate, trustworthy
+- Creative: Bold, artistic, innovative
+- Minimal: Simple, elegant, sophisticated
+- Tech: Modern, digital, futuristic`;
+
+  const userPrompt = `Create a detailed image generation prompt for this project:
+
+Project: ${projectData.title}
+Client: ${projectData.client_name}
+Industry: ${projectData.industry || "Technology"}
+Challenge: ${projectData.challenge_text?.substring(0, 100)}...
+Solution: ${projectData.solution_text?.substring(0, 100)}...
+Results: ${projectData.results_text?.substring(0, 100)}...
+Style: ${style}
+
+Generate a prompt that would create a stunning portfolio showcase image.`;
+
+  return await requestText(systemPrompt, userPrompt, {
+    temperature: 0.7,
+    maxTokens: 500
+  });
 }
 
 function parseList(value) {
@@ -231,7 +430,11 @@ function classifySentiment({ rating, reviewText }) {
 module.exports = {
   analyzeProjectFit,
   classifySentiment,
+  detectAIService,
   generateChannelDraft,
+  generateImagePrompt,
   generatePortfolioDraft,
-  generateReviewReply
+  generateReviewReply,
+  generateSocialContent,
+  requestText
 };

@@ -1,58 +1,109 @@
-# Portfolio Amplifier V1
+# Portfolio Amplifier
 
-Portfolio Amplifier is a project-to-presence workflow for freelancers, studios, and product-minded service teams. It turns client work into a polished case study, transforms that story into channel-ready content, and centralizes review-response workflows in the same product.
+## Turn client work into winning case studies and shareable launch-ready campaigns.
 
-Primary journey:
+Portfolio Amplifier is the fast track from raw project work to polished portfolio story, AI-driven channel content, and ready-to-publish distribution.
 
-Onboard -> Create Project -> Build Portfolio -> Run Analysis -> Generate Platform Content -> Connect Channels -> Publish / Export -> Monitor Reviews -> Respond
+It is built for freelancers, studios, and product teams who want to stop leaving marketing to the end of a project.
 
-## What’s Included
+---
 
-- Guided onboarding for account type, professional profile, channel presence, and first-goal setup
-- Project-first workspace with case-study generation, proof-point capture, and portfolio drafting
-- Staged project builder with upload preview, AI build progress, and final review state
-- Publish Studio for visible platform analysis, channel scoring, and content generation
-- Channel hub for LinkedIn, Dribbble, and Behance export-mode flows
-- Reviews and ratings workspace with AI-assisted response drafts
-- Demo-friendly frontend fallback when a live backend session is not available
-- Express + PostgreSQL backend with auth, projects, amplify, channel, and ORM routes
+## What this product does
 
-## Stack
+### Build a stronger project story
+- Capture client impact and proof points in one structured project workflow
+- Create a living case study that updates as the project grows
+- Automatically turn project details into polished portfolio content
 
-- Frontend: Next.js App Router + TypeScript + Tailwind CSS
-- Backend: Node.js + Express + PostgreSQL
-- Auth: Email/password + Google OAuth scaffold
-- Publishing: LinkedIn + Dribbble OAuth scaffolds, Behance export-first workflow
-- AI layer: Mock-first content and analysis services with optional external AI hooks
-- Project build lifecycle persisted on the project record (`build_stage`, `build_progress`, timestamps, failure state)
+### Generate publish-ready content
+- AI-powered social copy for LinkedIn, Behance, and Dribbble
+- Image concept prompts to speed creative asset production
+- Tone, format, and channel recommendations baked into every draft
 
-## App Sections
+### Publish with confidence
+- Channel scoring and distribution guidance show where your work will land best
+- Export-friendly Behance output, guided Dribbble uploads, and LinkedIn publish readiness
+- Built-in review and response workflows keep client feedback moving
 
-- `/` marketing landing page
-- `/signup` workspace creation
-- `/login` sign-in
-- `/onboarding` guided onboarding flow
-- `/dashboard` mission-control view
-- `/dashboard/projects` project library and project creation wizard
-- `/dashboard/publish-studio` platform analysis and draft generation
-- `/dashboard/reviews` review inbox and AI responses
-- `/dashboard/channels` channel connection hub
-- `/dashboard/settings` workspace defaults
+### Launch faster, with less busywork
+- Guided onboarding gets new work flowing quickly
+- Project creation wizard simplifies case study setup
+- Demo-ready mode means stakeholders can preview the product immediately
 
-## Local Development
+---
+
+## Product highlights
+
+### Publish Studio
+A single workspace for platform analysis, draft generation, asset guidance, and publishing readiness.
+
+### Project Workbench
+Turn client projects into rich portfolio stories with challenge > solution > results structure, deliverable capture, and proof-point tracking.
+
+### AI-powered storytelling
+Use intelligent prompts to generate crisp social posts and visual direction while preserving your project voice and impact.
+
+### Review + response workflows
+Keep client feedback in one place and auto-generate response drafts for faster issue resolution.
+
+---
+
+## Why users love it
+
+- Saves time by turning project notes into complete portfolio drafts
+- Helps teams stay consistent across channels and customer stories
+- Makes publishing feel less like a chore and more like a product launch
+- Brings clarity to what content belongs on LinkedIn, Behance, and Dribbble
+
+---
+
+## Experience map
+
+1. **Onboard** — define your profile, goals, and channel presence
+2. **Create a project** — add the brief, challenge, solution, results, and assets
+3. **Build portfolio** — generate structured case study content and proof points
+4. **Analyze fit** — get recommended channel angles and distribution advice
+5. **Generate content** — produce platform-specific copy and image prompts
+6. **Publish / export** — prepare direct posts, guided uploads, or export-ready assets
+7. **Monitor reviews** — collect feedback and auto-draft smart responses
+
+---
+
+## Core features
+
+- Guided onboarding and workspace setup
+- Modern case-study builder with step-by-step project creation
+- AI content generation for marketing-ready social copy
+- Platform-specific strategy recommendations
+- Asset guidance and image prompt generation
+- Review inbox with AI-assisted response drafts
+- LinkedIn, Behance, and Dribbble publishing workflows
+- Demo-friendly mode for instant previews
+
+---
+
+## Product structure
+
+- `app/` — Next.js app pages and layouts for the product experience
+- `components/` — UI building blocks and dashboard screens
+- `lib/` — client-side API, workflow data, demo content, and view models
+- `backend/` — Express API, auth, database, and AI services
+- `docs/` — product guides, runbooks, and reference materials
+
+---
+
+## Quick start
 
 ### Frontend
-
 ```bash
 npm install
 copy .env.example .env.local
 npm run dev
 ```
 
-Frontend runs on `http://localhost:3001`.
+Open the app at `http://localhost:3001`.
 
 ### Backend
-
 ```bash
 cd backend
 npm install
@@ -61,119 +112,32 @@ npm run migrate
 npm run dev
 ```
 
-Backend runs on `http://localhost:3000`.
+API runs at `http://localhost:3000`.
 
-## Environment Variables
+---
 
-Frontend example: [E:\GPT Builder\.env.example](E:/GPT%20Builder/.env.example)
+## Production setup
 
-```ini
-NEXT_PUBLIC_APP_URL=http://localhost:3001
-NEXT_PUBLIC_API_URL=http://localhost:3000
-```
+- Use one Vercel project for the frontend and API
+- Connect a PostgreSQL database via `DATABASE_URL`
+- Store uploads in Supabase Storage or another cloud bucket
+- Set `AI_API_KEY` and `AI_SERVICE_URL` for your chosen generative AI provider
+- Keep `NEXT_PUBLIC_API_URL` unset in production so the frontend uses same-domain API routing
 
-Production note:
+---
 
-- In Vercel production, leave `NEXT_PUBLIC_API_URL` unset so the frontend calls the same-domain
-  `/api/*` routes mounted inside the Next.js deployment.
+## Built with
 
-Backend example: [E:\GPT Builder\backend\.env.example](E:/GPT%20Builder/backend/.env.example)
+- Next.js + TypeScript + Tailwind CSS
+- React for fast UI interactions
+- Express + PostgreSQL for backend persistence
+- AI services for content and image prompt generation
+- OAuth-ready auth for Google, LinkedIn, and Dribbble
 
-Core backend variables:
+---
 
-- `PORT`
-- `FRONTEND_URL`
-- `DATABASE_URL`
-- `DB_HOST`
-- `DB_PORT`
-- `DB_NAME`
-- `DB_USER`
-- `DB_PASS`
-- `DB_SSL`
-- `JWT_SECRET`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_CALLBACK_URL`
-- `LINKEDIN_CLIENT_ID`
-- `LINKEDIN_CLIENT_SECRET`
-- `LINKEDIN_AUTH_REDIRECT_URI`
-- `LINKEDIN_REDIRECT_URI`
-- `DRIBBBLE_CLIENT_ID`
-- `DRIBBBLE_CLIENT_SECRET`
-- `DRIBBBLE_REDIRECT_URI`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `SUPABASE_STORAGE_BUCKET`
-- `BLOB_READ_WRITE_TOKEN`
-- `AI_SERVICE_URL`
-- `AI_API_KEY`
+## Launch status
 
-Supabase note:
+The app is designed as a production-ready portfolio workflow with rapid onboarding, AI-driven content generation, and publishing workflow support.
 
-- On Vercel, use the Supabase pooler connection string for `DATABASE_URL` instead of the direct
-  `db.<project-ref>.supabase.co:5432` host.
-- For persistent free uploads, prefer Supabase Storage over local `/uploads`.
-- Leave `AI_API_KEY` unset if you want the backend to stay on the free deterministic fallback.
-
-## API Surface
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-- `POST /api/auth/onboarding`
-- `GET /api/projects`
-- `GET /api/projects/:projectId`
-- `GET /api/projects/:projectId/build-status`
-- `POST /api/projects`
-- `PUT /api/projects/:projectId/portfolio`
-- `POST /api/amplify/:projectId/analyze`
-- `POST /api/amplify/generate-content`
-- `GET /api/channels/status`
-- `GET /api/channels/:platform/connect-url`
-- `GET /api/channels/behance/export-template`
-- `GET /api/orm`
-- `POST /api/orm/:id/respond`
-- `POST /api/orm/:id/approve`
-
-## Demo Mode
-
-The frontend supports a seeded demo experience. If a user enters through the demo CTA or browses without a live backend session, onboarding and dashboard flows still work with seeded projects, publish drafts, channel states, and review data.
-
-This makes the app easy to preview on Vercel even before the Express backend is hosted separately.
-
-## Deployment Note
-
-This repository is split into:
-
-- a Next.js frontend at the repo root
-- an Express/PostgreSQL backend under `backend/`
-
-The Express backend is mounted inside the same Vercel-hosted Next.js deployment through
-`pages/api/[...path].js`, which keeps browser requests same-origin and avoids a separate public API
-domain for the core `/api/*` routes.
-
-Recommended production wiring:
-
-- One Vercel project for both frontend and API
-- PostgreSQL on Supabase via `DATABASE_URL`
-- Supabase Storage for uploads
-- Optional external AI later, but deterministic fallback works for a fully free setup
-
-Without a hosted backend, the public deploy still supports the demo path and seeded product walkthrough.
-
-## Repository Layout
-
-```text
-app/                    Next.js routes and app-shell pages
-components/             Shared UI, layout, auth provider, dashboard screens
-lib/                    API client, marketing data, demo data, view models
-backend/                Express API, routes, middleware, database config, migration
-docs/                   Supporting docs and runbooks
-```
-
-## Status
-
-- Frontend production build passes
-- Backend boots locally with a health endpoint
-- Public repo documentation is ready
-- Frontend release can be deployed on Vercel
+If you want, I can also add a short product landing section and feature cards for the public homepage next. 

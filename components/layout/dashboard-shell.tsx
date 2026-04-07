@@ -137,7 +137,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link href="/dashboard/projects" className={buttonStyles({ size: "sm" })}>
+            <Link href="/dashboard/projects/new" className={buttonStyles({ size: "sm" })}>
               + New Project
             </Link>
             <button className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container-low">

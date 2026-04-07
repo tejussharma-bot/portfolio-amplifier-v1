@@ -15,3 +15,4 @@ backend/uploads
 .gsd/STATE.md
 .gsd/JOURNAL.md
 .gsd/TODO.md
+.env*.local
