@@ -64,14 +64,44 @@ const baseConfig = {
   allowExitOnIdle: true
 };
 
-const pool = new Pool(
-  hasDatabaseUrl
-    ? {
+function createInMemoryPool() {
+  const { newDb } = require("pg-mem");
+  const globalKey = "__portfolioAmplifierInMemoryPg";
+
+  if (globalThis[globalKey]?.pool) {
+    return globalThis[globalKey].pool;
+  }
+
+  const db = newDb({
+    autoCreateForeignKeyIndices: true
+  });
+  const adapter = db.adapters.createPg();
+  const pool = new adapter.Pool();
+
+  globalThis[globalKey] = {
+    db,
+    pool
+  };
+
+  return pool;
+}
+
+const shouldUseInMemoryDb =
+  process.env.USE_IN_MEMORY_DB === "true" ||
+  (!hasDatabaseUrl &&
+    !process.env.VERCEL &&
+    ["localhost", "127.0.0.1", "::1", ""].includes(String(process.env.DB_HOST || "localhost")));
+
+const pool = shouldUseInMemoryDb
+  ? createInMemoryPool()
+  : new Pool(
+    hasDatabaseUrl
+      ? {
         ...baseConfig,
         connectionString,
         ssl
       }
-    : {
+      : {
         ...baseConfig,
         host: process.env.DB_HOST,
         port: Number(process.env.DB_PORT || 5432),
@@ -80,7 +110,7 @@ const pool = new Pool(
         password: process.env.DB_PASS,
         ssl
       }
-);
+  );
 
 pool.on("error", (error) => {
   console.error("Unexpected PostgreSQL pool error", error);

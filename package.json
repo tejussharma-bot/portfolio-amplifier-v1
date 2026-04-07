@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "postinstall": "npm --prefix backend install",
-    "dev": "next dev -p 3001",
-    "dev:backend": "npm --prefix backend run dev",
+    "dev": "node scripts/dev.js",
+    "dev:backend": "node scripts/dev-backend.js",
     "migrate:backend": "npm --prefix backend run migrate",
     "migrate": "npm --prefix backend run migrate",
     "build": "node scripts/build.js",
@@ -31,6 +31,7 @@
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.30",
+    "pg-mem": "^3.0.14",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.14",
     "typescript": "^5.6.3"

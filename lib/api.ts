@@ -120,17 +120,26 @@ export async function fetchProjects(token: string) {
 }
 
 export async function fetchProjectDetail(token: string, projectId: string) {
-  return apiRequest<{ project: any; drafts: any[]; analysis: any | null }>(
+  return apiRequest<{ project: any; drafts: any[]; analysis: any | null; buildStatus?: any | null }>(
     `/api/projects/${projectId}`,
     { token }
   );
 }
 
 export async function createProject(token: string, formData: FormData) {
-  return apiRequest<{ project: any; portfolioDraft: any }>("/api/projects", {
-    method: "POST",
-    token,
-    body: formData
+  return apiRequest<{ project: any; portfolioDraft: any; analysis?: any | null; buildStatus?: any | null }>(
+    "/api/projects",
+    {
+      method: "POST",
+      token,
+      body: formData
+    }
+  );
+}
+
+export async function fetchProjectBuildStatus(token: string, projectId: string) {
+  return apiRequest<{ project: any; buildStatus: any }>(`/api/projects/${projectId}/build-status`, {
+    token
   });
 }
 
@@ -181,6 +190,69 @@ export async function generateContent(
       "Content-Type": "application/json"
     },
     body: JSON.stringify(payload)
+  });
+}
+
+export async function updateGeneratedDraft(
+  token: string,
+  draftId: string,
+  payload: {
+    draftData?: {
+      headline?: string;
+      body?: string;
+      cta?: string;
+      tags?: string[];
+    };
+    tone?: string;
+    objective?: string;
+    contentType?: string;
+  }
+) {
+  return apiRequest<{ draft: any }>(`/api/amplify/drafts/${draftId}`, {
+    method: "PUT",
+    token,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function scheduleGeneratedDraft(
+  token: string,
+  draftId: string,
+  scheduledFor: string
+) {
+  return apiRequest<{ message: string; draft: any }>(`/api/amplify/drafts/${draftId}/schedule`, {
+    method: "POST",
+    token,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ scheduledFor })
+  });
+}
+
+export async function exportGeneratedDraft(token: string, draftId: string) {
+  return apiRequest<{ mode: string; draft: any; exportPayload: any }>(
+    `/api/amplify/drafts/${draftId}/export`,
+    {
+      method: "POST",
+      token
+    }
+  );
+}
+
+export async function publishGeneratedDraft(token: string, draftId: string) {
+  return apiRequest<{
+    mode: string;
+    message: string;
+    draft: any;
+    exportPayload?: any;
+    externalPostId?: string | null;
+  }>(`/api/amplify/drafts/${draftId}/publish`, {
+    method: "POST",
+    token
   });
 }
 

@@ -4,7 +4,7 @@ const axios = require("axios");
 
 const { pool } = require("../database/config");
 const { authenticateToken } = require("../middleware/auth");
-const { hasConfiguredCredentials } = require("../utils/config");
+const { cleanEnvValue, hasConfiguredCredentials } = require("../utils/config");
 
 const router = express.Router();
 
@@ -14,11 +14,11 @@ const setupGuides = {
     title: "Share on LinkedIn",
     mode: "direct",
     steps: [
-      "Create a LinkedIn app and enable Sign In with LinkedIn plus Share on LinkedIn.",
+      "Create a LinkedIn app and enable Sign In with LinkedIn using OpenID Connect.",
       "Set the redirect URI to your backend callback URL.",
-      "Connect the account here, then publish text-first posts directly from Publish Studio."
+      "Connect the account here for sign-in and identity linking. Direct publishing requires separate LinkedIn posting approval."
     ],
-    requirements: ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "LINKEDIN_REDIRECT_URI"]
+    requirements: ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "LINKEDIN_AUTH_REDIRECT_URI"]
   },
   dribbble: {
     platform: "dribbble",
@@ -45,7 +45,7 @@ const setupGuides = {
 };
 
 function buildFrontendUrl(pathname = "/dashboard/channels", searchParams = {}) {
-  const base = process.env.FRONTEND_URL || "http://localhost:3001";
+  const base = cleanEnvValue(process.env.FRONTEND_URL) || "http://localhost:3001";
   const target = new URL(pathname, base);
 
   Object.entries(searchParams).forEach(([key, value]) => {
@@ -79,38 +79,19 @@ function verifyOAuthState(state) {
   return jwt.verify(state, process.env.JWT_SECRET);
 }
 
-function isPlatformConfigured(platform) {
-  if (platform === "linkedin") {
-    return hasConfiguredCredentials(
-      process.env.LINKEDIN_CLIENT_ID,
-      process.env.LINKEDIN_CLIENT_SECRET,
-      process.env.LINKEDIN_REDIRECT_URI
-    );
-  }
-
-  if (platform === "dribbble") {
-    return hasConfiguredCredentials(
-      process.env.DRIBBBLE_CLIENT_ID,
-      process.env.DRIBBBLE_CLIENT_SECRET,
-      process.env.DRIBBBLE_REDIRECT_URI
-    );
-  }
-
-  return true;
-}
-
 async function upsertChannel({
   userId,
   platform,
-  platformUserId = null,
+  platformUserId,
   accessToken,
   refreshToken = null,
   expiresIn = null,
   metadata = {}
 }) {
-  const expiresAt = expiresIn
-    ? new Date(Date.now() + Number(expiresIn) * 1000)
-    : null;
+  const expiresAt =
+    typeof expiresIn === "number" && Number.isFinite(expiresIn)
+      ? new Date(Date.now() + expiresIn * 1000)
+      : null;
 
   await pool.query(
     `INSERT INTO user_channels (
@@ -145,22 +126,34 @@ async function upsertChannel({
   );
 }
 
-async function fetchLinkedInMemberId(accessToken) {
-  try {
-    const response = await axios.get("https://api.linkedin.com/v2/me", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "X-Restli-Protocol-Version": "2.0.0"
-      },
-      params: {
-        projection: "(id)"
-      }
-    });
+function isPlatformConfigured(platform) {
+  if (platform === "linkedin") {
+    const clientId = cleanEnvValue(process.env.LINKEDIN_CLIENT_ID);
+    const clientSecret = cleanEnvValue(process.env.LINKEDIN_CLIENT_SECRET);
+    const redirectUri =
+      cleanEnvValue(process.env.LINKEDIN_AUTH_REDIRECT_URI) ||
+      cleanEnvValue(process.env.LINKEDIN_REDIRECT_URI);
 
-    return response.data?.id ? String(response.data.id) : null;
-  } catch (error) {
-    return null;
+    return hasConfiguredCredentials(
+      clientId,
+      clientSecret,
+      redirectUri
+    );
   }
+
+  if (platform === "dribbble") {
+    const clientId = cleanEnvValue(process.env.DRIBBBLE_CLIENT_ID);
+    const clientSecret = cleanEnvValue(process.env.DRIBBBLE_CLIENT_SECRET);
+    const redirectUri = cleanEnvValue(process.env.DRIBBBLE_REDIRECT_URI);
+
+    return hasConfiguredCredentials(
+      clientId,
+      clientSecret,
+      redirectUri
+    );
+  }
+
+  return true;
 }
 
 router.get("/status", authenticateToken, async (req, res) => {
@@ -202,15 +195,20 @@ router.get("/:platform/connect-url", authenticateToken, async (req, res) => {
   const state = signOAuthState({
     userId: req.user.userId,
     platform,
+    mode: "channel-connect",
     returnTo: normalizeReturnTo(req.query.returnTo)
   });
 
   if (platform === "linkedin") {
+    const clientId = cleanEnvValue(process.env.LINKEDIN_CLIENT_ID);
+    const redirectUri =
+      cleanEnvValue(process.env.LINKEDIN_AUTH_REDIRECT_URI) ||
+      cleanEnvValue(process.env.LINKEDIN_REDIRECT_URI);
     const params = new URLSearchParams({
       response_type: "code",
-      client_id: process.env.LINKEDIN_CLIENT_ID,
-      redirect_uri: process.env.LINKEDIN_REDIRECT_URI,
-      scope: "w_member_social r_liteprofile",
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope: "openid profile email",
       state
     });
 
@@ -220,8 +218,8 @@ router.get("/:platform/connect-url", authenticateToken, async (req, res) => {
   }
 
   const params = new URLSearchParams({
-    client_id: process.env.DRIBBBLE_CLIENT_ID,
-    redirect_uri: process.env.DRIBBBLE_REDIRECT_URI,
+    client_id: cleanEnvValue(process.env.DRIBBBLE_CLIENT_ID),
+    redirect_uri: cleanEnvValue(process.env.DRIBBBLE_REDIRECT_URI),
     scope: "public upload",
     state
   });
@@ -252,96 +250,25 @@ router.get("/linkedin/connect", authenticateToken, (req, res) => {
   const state = signOAuthState({
     userId: req.user.userId,
     platform: "linkedin",
+    mode: "channel-connect",
     returnTo: normalizeReturnTo(req.query.returnTo)
   });
 
+  const clientId = cleanEnvValue(process.env.LINKEDIN_CLIENT_ID);
+  const redirectUri =
+    cleanEnvValue(process.env.LINKEDIN_AUTH_REDIRECT_URI) ||
+    cleanEnvValue(process.env.LINKEDIN_REDIRECT_URI);
   const params = new URLSearchParams({
     response_type: "code",
-    client_id: process.env.LINKEDIN_CLIENT_ID,
-    redirect_uri: process.env.LINKEDIN_REDIRECT_URI,
-    scope: "w_member_social r_liteprofile",
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: "openid profile email",
     state
   });
 
   return res.redirect(
     `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`
   );
-});
-
-router.get("/linkedin/callback", async (req, res) => {
-  const { code, state, error, error_description } = req.query;
-
-  if (error) {
-    return res.redirect(
-      buildFrontendUrl("/dashboard/channels", {
-        oauth: "error",
-        platform: "linkedin",
-        message: error_description || error
-      })
-    );
-  }
-
-  if (!code || !state) {
-    return res.redirect(
-      buildFrontendUrl("/dashboard/channels", {
-        oauth: "error",
-        platform: "linkedin",
-        message: "Missing OAuth code or state"
-      })
-    );
-  }
-
-  try {
-    const decoded = verifyOAuthState(state);
-    const tokenParams = new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: process.env.LINKEDIN_REDIRECT_URI,
-      client_id: process.env.LINKEDIN_CLIENT_ID,
-      client_secret: process.env.LINKEDIN_CLIENT_SECRET
-    });
-
-    const tokenResponse = await axios.post(
-      "https://www.linkedin.com/oauth/v2/accessToken",
-      tokenParams.toString(),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        }
-      }
-    );
-
-    const platformUserId = await fetchLinkedInMemberId(tokenResponse.data.access_token);
-
-    await upsertChannel({
-      userId: decoded.userId,
-      platform: "linkedin",
-      platformUserId,
-      accessToken: tokenResponse.data.access_token,
-      expiresIn: tokenResponse.data.expires_in,
-      metadata: {
-        scope: "w_member_social r_liteprofile"
-      }
-    });
-
-    return res.redirect(
-      buildFrontendUrl(decoded.returnTo || "/dashboard/channels", {
-        oauth: "success",
-        platform: "linkedin"
-      })
-    );
-  } catch (error) {
-    return res.redirect(
-      buildFrontendUrl("/dashboard/channels", {
-        oauth: "error",
-        platform: "linkedin",
-        message:
-          error.response?.data?.error_description ||
-          error.response?.data?.message ||
-          "LinkedIn connection failed"
-      })
-    );
-  }
 });
 
 router.get("/dribbble/connect", authenticateToken, (req, res) => {
@@ -356,8 +283,8 @@ router.get("/dribbble/connect", authenticateToken, (req, res) => {
   });
 
   const params = new URLSearchParams({
-    client_id: process.env.DRIBBBLE_CLIENT_ID,
-    redirect_uri: process.env.DRIBBBLE_REDIRECT_URI,
+    client_id: cleanEnvValue(process.env.DRIBBBLE_CLIENT_ID),
+    redirect_uri: cleanEnvValue(process.env.DRIBBBLE_REDIRECT_URI),
     scope: "public upload",
     state
   });
@@ -367,6 +294,9 @@ router.get("/dribbble/connect", authenticateToken, (req, res) => {
 
 router.get("/dribbble/callback", async (req, res) => {
   const { code, state, error, error_description } = req.query;
+  const clientId = cleanEnvValue(process.env.DRIBBBLE_CLIENT_ID);
+  const clientSecret = cleanEnvValue(process.env.DRIBBBLE_CLIENT_SECRET);
+  const redirectUri = cleanEnvValue(process.env.DRIBBBLE_REDIRECT_URI);
 
   if (error) {
     return res.redirect(
@@ -391,10 +321,10 @@ router.get("/dribbble/callback", async (req, res) => {
   try {
     const decoded = verifyOAuthState(state);
     const tokenResponse = await axios.post("https://dribbble.com/oauth/token", {
-      client_id: process.env.DRIBBBLE_CLIENT_ID,
-      client_secret: process.env.DRIBBBLE_CLIENT_SECRET,
+      client_id: clientId,
+      client_secret: clientSecret,
       code,
-      redirect_uri: process.env.DRIBBBLE_REDIRECT_URI
+      redirect_uri: redirectUri
     });
 
     let platformUserId = null;
@@ -416,7 +346,10 @@ router.get("/dribbble/callback", async (req, res) => {
       platformUserId,
       accessToken: tokenResponse.data.access_token,
       refreshToken: tokenResponse.data.refresh_token || null,
-      expiresIn: tokenResponse.data.expires_in || null
+      expiresIn: tokenResponse.data.expires_in || null,
+      metadata: {
+        scope: "public upload"
+      }
     });
 
     return res.redirect(

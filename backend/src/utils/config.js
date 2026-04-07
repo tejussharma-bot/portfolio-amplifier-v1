@@ -17,6 +17,10 @@ function normalizeValue(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function cleanEnvValue(value) {
+  return String(value || "").trim();
+}
+
 function isPlaceholderValue(value) {
   const normalized = normalizeValue(value);
 
@@ -55,6 +59,7 @@ function getAuthProviderStatus() {
 }
 
 module.exports = {
+  cleanEnvValue,
   getAuthProviderStatus,
   hasConfiguredCredentials,
   isPlaceholderValue

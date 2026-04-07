@@ -32,6 +32,7 @@ export interface Review {
 
 export interface ChannelDraft {
   id: "linkedin" | "behance" | "dribbble";
+  recordId?: string | null;
   label: string;
   tone: string;
   fit: string;
@@ -41,6 +42,9 @@ export interface ChannelDraft {
   cta: string;
   tags: string[];
   scheduledAt: string | null;
+  status?: string | null;
+  publishedAt?: string | null;
+  externalPostId?: string | null;
 }
 
 export const productLoop = [

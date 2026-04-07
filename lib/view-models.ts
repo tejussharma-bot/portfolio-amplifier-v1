@@ -73,6 +73,11 @@ export function normalizeProjectRow(row: any) {
     deliverables: Array.isArray(row.deliverables) ? row.deliverables : [],
     testimonials: Array.isArray(row.testimonials) ? row.testimonials : [],
     portfolioContent: row.content_json || null,
+    buildStage: row.build_stage || null,
+    buildProgress: typeof row.build_progress === "number" ? row.build_progress : 0,
+    buildStartedAt: row.build_started_at || null,
+    buildCompletedAt: row.build_completed_at || null,
+    lastBuildError: row.last_build_error || null,
     blueprint
   };
 }
@@ -81,6 +86,7 @@ export function normalizeProjectDetail(detail: {
   project: any;
   drafts?: any[];
   analysis?: any;
+  buildStatus?: any;
 }) {
   const project = detail.project;
   const normalized = normalizeProjectRow({
@@ -95,6 +101,7 @@ export function normalizeProjectDetail(detail: {
     ...normalized,
     drafts,
     analysis: detail.analysis,
+    buildStatus: detail.buildStatus || null,
     blueprint
   };
 }
@@ -113,6 +120,7 @@ export function normalizeGeneratedDraft(row: any) {
 
   return {
     id: row.platform,
+    recordId: row.id ? String(row.id) : null,
     label:
       row.platform === "linkedin"
         ? "LinkedIn"
@@ -126,7 +134,10 @@ export function normalizeGeneratedDraft(row: any) {
     body: data.body || data.caption || "",
     cta: data.cta || "",
     tags,
-    scheduledAt: row.scheduled_for ? formatDisplayDate(row.scheduled_for) : null
+    scheduledAt: row.scheduled_for ? formatDisplayDate(row.scheduled_for) : null,
+    status: row.status || null,
+    publishedAt: row.published_at || null,
+    externalPostId: row.external_post_id || null
   };
 }
 

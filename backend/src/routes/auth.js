@@ -5,7 +5,11 @@ const passport = require("passport");
 
 const { pool } = require("../database/config");
 const { authenticateToken, signToken } = require("../middleware/auth");
-const { getAuthProviderStatus, hasConfiguredCredentials } = require("../utils/config");
+const {
+  cleanEnvValue,
+  getAuthProviderStatus,
+  hasConfiguredCredentials
+} = require("../utils/config");
 
 const router = express.Router();
 
@@ -35,14 +39,40 @@ function decodeState(value) {
   }
 }
 
-function buildFrontendRedirect(pathname, token) {
-  const redirectUrl = new URL(
-    pathname || "/dashboard",
-    process.env.FRONTEND_URL || "http://localhost:3001"
-  );
+function getRequestOrigin(req) {
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const forwardedHost = req.headers["x-forwarded-host"];
+  const host = forwardedHost || req.headers.host;
+
+  if (host) {
+    const proto = forwardedProto || (process.env.VERCEL ? "https" : req.protocol || "http");
+    return `${proto}://${host}`;
+  }
+
+  return cleanEnvValue(process.env.FRONTEND_URL) || "http://localhost:3001";
+}
+
+function buildFrontendRedirect(req, pathname, token) {
+  const redirectUrl = new URL(pathname || "/dashboard", getRequestOrigin(req));
 
   redirectUrl.searchParams.set("token", token);
   return redirectUrl.toString();
+}
+
+async function ensureUserScaffold(client, userId) {
+  await client.query(
+    `INSERT INTO workspace_settings (user_id)
+     VALUES ($1)
+     ON CONFLICT (user_id) DO NOTHING`,
+    [userId]
+  );
+
+  await client.query(
+    `INSERT INTO user_preferences (user_id)
+     VALUES ($1)
+     ON CONFLICT (user_id) DO NOTHING`,
+    [userId]
+  );
 }
 
 router.get("/providers", (_req, res) => {
@@ -72,18 +102,7 @@ router.post("/register", async (req, res) => {
     );
 
     const user = result.rows[0];
-    await client.query(
-      `INSERT INTO workspace_settings (user_id)
-       VALUES ($1)
-       ON CONFLICT (user_id) DO NOTHING`,
-      [user.id]
-    );
-    await client.query(
-      `INSERT INTO user_preferences (user_id)
-       VALUES ($1)
-       ON CONFLICT (user_id) DO NOTHING`,
-      [user.id]
-    );
+    await ensureUserScaffold(client, user.id);
     await client.query("COMMIT");
 
     return res.status(201).json({
@@ -144,6 +163,7 @@ router.get("/google", (req, res, next) => {
   }
 
   const state = encodeState({
+    mode: "login",
     redirectTo: req.query.redirectTo || "/dashboard"
   });
 
@@ -184,18 +204,6 @@ router.get("/google/callback", (req, res, next) => {
              RETURNING *`,
             [profile.email.toLowerCase(), profile.googleId, profile.fullName || null]
           );
-          await client.query(
-            `INSERT INTO workspace_settings (user_id)
-             VALUES ($1)
-             ON CONFLICT (user_id) DO NOTHING`,
-            [userResult.rows[0].id]
-          );
-          await client.query(
-            `INSERT INTO user_preferences (user_id)
-             VALUES ($1)
-             ON CONFLICT (user_id) DO NOTHING`,
-            [userResult.rows[0].id]
-          );
         } else {
           userResult = await client.query(
             `UPDATE users
@@ -208,12 +216,14 @@ router.get("/google/callback", (req, res, next) => {
           );
         }
 
+        await ensureUserScaffold(client, userResult.rows[0].id);
+
         await client.query("COMMIT");
 
         const user = userResult.rows[0];
         const redirectState = decodeState(req.query.state);
         const redirectTo = redirectState.redirectTo || "/dashboard";
-        return res.redirect(buildFrontendRedirect(redirectTo, signToken(user)));
+        return res.redirect(buildFrontendRedirect(req, redirectTo, signToken(user)));
       } catch (dbError) {
         if (client) {
           await client.query("ROLLBACK");
@@ -227,24 +237,29 @@ router.get("/google/callback", (req, res, next) => {
 });
 
 router.get("/linkedin", (req, res) => {
+  const clientId = cleanEnvValue(process.env.LINKEDIN_CLIENT_ID);
+  const clientSecret = cleanEnvValue(process.env.LINKEDIN_CLIENT_SECRET);
+  const redirectUri = cleanEnvValue(process.env.LINKEDIN_AUTH_REDIRECT_URI);
+
   if (
     !hasConfiguredCredentials(
-      process.env.LINKEDIN_CLIENT_ID,
-      process.env.LINKEDIN_CLIENT_SECRET,
-      process.env.LINKEDIN_AUTH_REDIRECT_URI
+      clientId,
+      clientSecret,
+      redirectUri
     )
   ) {
     return res.status(500).json({ error: "LinkedIn OAuth is not configured" });
   }
 
   const state = encodeState({
+    mode: "login",
     redirectTo: req.query.redirectTo || "/dashboard"
   });
 
   const params = new URLSearchParams({
     response_type: "code",
-    client_id: process.env.LINKEDIN_CLIENT_ID,
-    redirect_uri: process.env.LINKEDIN_AUTH_REDIRECT_URI,
+    client_id: clientId,
+    redirect_uri: redirectUri,
     scope: "openid profile email",
     state
   });
@@ -256,6 +271,9 @@ router.get("/linkedin", (req, res) => {
 
 router.get("/linkedin/callback", async (req, res) => {
   const { code, state, error, error_description } = req.query;
+  const redirectUri = cleanEnvValue(process.env.LINKEDIN_AUTH_REDIRECT_URI);
+  const clientId = cleanEnvValue(process.env.LINKEDIN_CLIENT_ID);
+  const clientSecret = cleanEnvValue(process.env.LINKEDIN_CLIENT_SECRET);
 
   if (error) {
     return res.status(500).send(error_description || "LinkedIn authentication failed");
@@ -272,9 +290,9 @@ router.get("/linkedin/callback", async (req, res) => {
     const tokenParams = new URLSearchParams({
       grant_type: "authorization_code",
       code: String(code),
-      redirect_uri: process.env.LINKEDIN_AUTH_REDIRECT_URI,
-      client_id: process.env.LINKEDIN_CLIENT_ID,
-      client_secret: process.env.LINKEDIN_CLIENT_SECRET
+      redirect_uri: redirectUri,
+      client_id: clientId,
+      client_secret: clientSecret
     });
 
     const tokenResponse = await axios.post(
@@ -311,6 +329,59 @@ router.get("/linkedin/callback", async (req, res) => {
 
     await client.query("BEGIN");
 
+    if (redirectState.mode === "channel-connect") {
+      await client.query(
+        `INSERT INTO user_channels (
+           user_id,
+           platform,
+           platform_user_id,
+           access_token,
+           refresh_token,
+           token_expires_at,
+           metadata,
+           is_active
+         )
+         VALUES ($1, 'linkedin', $2, $3, NULL, $4, $5, TRUE)
+         ON CONFLICT (user_id, platform)
+         DO UPDATE SET
+           platform_user_id = EXCLUDED.platform_user_id,
+           access_token = EXCLUDED.access_token,
+           refresh_token = EXCLUDED.refresh_token,
+           token_expires_at = EXCLUDED.token_expires_at,
+           metadata = EXCLUDED.metadata,
+           is_active = TRUE,
+           updated_at = CURRENT_TIMESTAMP`,
+        [
+          redirectState.userId,
+          linkedinProfile.sub,
+          tokenResponse.data.access_token,
+          tokenResponse.data.expires_in
+            ? new Date(Date.now() + Number(tokenResponse.data.expires_in) * 1000)
+            : null,
+          JSON.stringify({
+            scope: "openid profile email",
+            connectionMode: "identity-only",
+            canPublish: false,
+            profile: {
+              sub: linkedinProfile.sub,
+              name: fullName,
+              email
+            }
+          })
+        ]
+      );
+
+      await client.query("COMMIT");
+
+      const channelRedirect = new URL(
+        redirectState.returnTo || "/dashboard/channels",
+        getRequestOrigin(req)
+      );
+      channelRedirect.searchParams.set("oauth", "success");
+      channelRedirect.searchParams.set("platform", "linkedin");
+      return res.redirect(channelRedirect.toString());
+    }
+
     let userResult = await client.query(
       "SELECT * FROM users WHERE linkedin_id = $1 OR email = $2 LIMIT 1",
       [linkedinProfile.sub, email]
@@ -327,18 +398,6 @@ router.get("/linkedin/callback", async (req, res) => {
           fullName
         ]
       );
-      await client.query(
-        `INSERT INTO workspace_settings (user_id)
-         VALUES ($1)
-         ON CONFLICT (user_id) DO NOTHING`,
-        [userResult.rows[0].id]
-      );
-      await client.query(
-        `INSERT INTO user_preferences (user_id)
-         VALUES ($1)
-         ON CONFLICT (user_id) DO NOTHING`,
-        [userResult.rows[0].id]
-      );
     } else {
       userResult = await client.query(
         `UPDATE users
@@ -352,11 +411,13 @@ router.get("/linkedin/callback", async (req, res) => {
       );
     }
 
+    await ensureUserScaffold(client, userResult.rows[0].id);
+
     await client.query("COMMIT");
 
     const user = userResult.rows[0];
     return res.redirect(
-      buildFrontendRedirect(redirectState.redirectTo || "/dashboard", signToken(user))
+      buildFrontendRedirect(req, redirectState.redirectTo || "/dashboard", signToken(user))
     );
   } catch (authError) {
     if (client) {
@@ -399,6 +460,18 @@ router.post("/onboarding", authenticateToken, async (req, res) => {
 
   try {
     client = await pool.connect();
+    const userCheck = await client.query("SELECT id FROM users WHERE id = $1 LIMIT 1", [
+      req.user.userId
+    ]);
+
+    if (!userCheck.rows[0]) {
+      await client.query("ROLLBACK").catch(() => {});
+      return res.status(409).json({
+        error:
+          "Authenticated user record was not found in the current database. Configure DATABASE_URL for persistent storage or restart the dev session."
+      });
+    }
+
     await client.query("BEGIN");
 
     await client.query(

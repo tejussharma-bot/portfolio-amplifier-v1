@@ -147,6 +147,15 @@ async function runMigrations(client) {
       ADD COLUMN IF NOT EXISTS export_payload JSONB DEFAULT '{}'::jsonb,
       ADD COLUMN IF NOT EXISTS exported_at TIMESTAMP;
   `);
+
+  await client.query(`
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS build_stage VARCHAR(80) DEFAULT 'intake_captured',
+      ADD COLUMN IF NOT EXISTS build_progress INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS build_started_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS build_completed_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS last_build_error TEXT;
+  `);
 }
 
 module.exports = {

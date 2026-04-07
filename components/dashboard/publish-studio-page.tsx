@@ -22,11 +22,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import {
   analyzeProject,
+  exportGeneratedDraft,
   fetchBehanceExportTemplate,
   fetchChannelStatus,
+  fetchConnectUrl,
   fetchProjectDetail,
   fetchProjects,
-  generateContent
+  generateContent,
+  publishGeneratedDraft,
+  scheduleGeneratedDraft,
+  updateGeneratedDraft
 } from "@/lib/api";
 import {
   projectDistributions,
@@ -115,6 +120,14 @@ export function PublishStudioPage({
   const [detail, setDetail] = useState<any>(null);
   const [channels, setChannels] = useState(mergeChannelState([]));
   const [behanceTemplate, setBehanceTemplate] = useState<any>(null);
+  const [actionFeedback, setActionFeedback] = useState<{
+    tone: "success" | "error" | "info";
+    title: string;
+    body: string;
+  } | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [exportingDraft, setExportingDraft] = useState(false);
 
   function toStudioProject(project: any): StudioProject {
     const normalized = normalizeProjectRow(project);
@@ -324,6 +337,31 @@ export function PublishStudioPage({
     }
   }
 
+  async function persistSelectedDraft() {
+    if (!selectedDraft?.recordId || !token || !isAuthenticated) {
+      return selectedDraft;
+    }
+
+    const result = await updateGeneratedDraft(token, selectedDraft.recordId, {
+      tone,
+      objective,
+      contentType: selectedDraft.id === "behance" ? "case-study" : "post",
+      draftData: {
+        headline: selectedDraft.headline,
+        body: selectedDraft.body,
+        cta: selectedDraft.cta,
+        tags: selectedDraft.tags
+      }
+    });
+    const normalized = normalizeGeneratedDraft(result.draft);
+
+    setDrafts((current) =>
+      current.map((draft) => (draft.id === normalized.id ? normalized : draft))
+    );
+
+    return normalized;
+  }
+
   function updateDraft(field: "headline" | "body" | "cta", value: string) {
     setDrafts((current) =>
       current.map((draft) =>
@@ -350,6 +388,182 @@ export function PublishStudioPage({
     await navigator.clipboard.writeText(payload);
     setCopied(selectedDraft.id);
     setTimeout(() => setCopied(null), 1800);
+  }
+
+  async function handlePublishAction() {
+    if (!selectedDraft) {
+      return;
+    }
+
+    if (!token || !isAuthenticated) {
+      setActionFeedback({
+        tone: "info",
+        title: "Login required",
+        body: "Sign in to save, publish, or export live channel drafts."
+      });
+      return;
+    }
+
+    if (selectedDraft.id === "linkedin" && selectedConnection.status !== "Connected") {
+      const result = await fetchConnectUrl(token, "linkedin", "/dashboard/publish-studio");
+      window.location.href = result.url;
+      return;
+    }
+
+    setPublishing(true);
+    setActionFeedback(null);
+
+    try {
+      const persistedDraft = await persistSelectedDraft();
+
+      if (!persistedDraft?.recordId) {
+        throw new Error("Generate a draft before publishing.");
+      }
+
+      const result = await publishGeneratedDraft(token, persistedDraft.recordId);
+      const normalized = normalizeGeneratedDraft(result.draft);
+
+      setDrafts((current) =>
+        current.map((draft) => (draft.id === normalized.id ? normalized : draft))
+      );
+
+      if (result.mode === "direct") {
+        setActionFeedback({
+          tone: "success",
+          title: "LinkedIn post published",
+          body: result.externalPostId
+            ? `The post was published successfully and stored with external ID ${result.externalPostId}.`
+            : "The LinkedIn post was published successfully."
+        });
+        return;
+      }
+
+      const exportBody = [
+        result.exportPayload?.title || normalized.headline,
+        result.exportPayload?.body ||
+          `${normalized.headline}\n\n${normalized.body}\n\n${normalized.cta}`,
+        Array.isArray(result.exportPayload?.tags) ? result.exportPayload.tags.join(" ") : ""
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      await navigator.clipboard.writeText(exportBody);
+      setActionFeedback({
+        tone: "success",
+        title: result.mode === "export" ? "Export pack prepared" : "Guided upload pack prepared",
+        body:
+          result.mode === "export"
+            ? "The Behance export content has been saved and copied for manual publishing."
+            : "The draft has been saved and copied for guided upload."
+      });
+    } catch (error: any) {
+      setActionFeedback({
+        tone: "error",
+        title: "Unable to complete publish action",
+        body: error?.message || "The publish step failed."
+      });
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function handleScheduleDraft() {
+    if (!selectedDraft?.recordId || !token || !isAuthenticated) {
+      setActionFeedback({
+        tone: "info",
+        title: "Generate and save a draft first",
+        body: "Scheduling needs a saved draft record in the workspace database."
+      });
+      return;
+    }
+
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    tomorrow.setHours(9, 30, 0, 0);
+    const defaultValue = tomorrow.toISOString().slice(0, 16);
+    const input = window.prompt(
+      "Schedule for local time (YYYY-MM-DDTHH:mm)",
+      defaultValue
+    );
+
+    if (!input) {
+      return;
+    }
+
+    setScheduling(true);
+    setActionFeedback(null);
+
+    try {
+      await persistSelectedDraft();
+      const result = await scheduleGeneratedDraft(token, selectedDraft.recordId, input);
+      const normalized = normalizeGeneratedDraft(result.draft);
+
+      setDrafts((current) =>
+        current.map((draft) => (draft.id === normalized.id ? normalized : draft))
+      );
+      setActionFeedback({
+        tone: "success",
+        title: "Draft scheduled",
+        body: `The ${normalized.label} draft is scheduled for ${normalized.scheduledAt || "later"}.`
+      });
+    } catch (error: any) {
+      setActionFeedback({
+        tone: "error",
+        title: "Unable to schedule draft",
+        body: error?.message || "Scheduling failed."
+      });
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  async function handleExportDraft() {
+    if (!selectedDraft?.recordId || !token || !isAuthenticated) {
+      setActionFeedback({
+        tone: "info",
+        title: "Generate and save a draft first",
+        body: "Export needs a saved draft record in the workspace database."
+      });
+      return;
+    }
+
+    setExportingDraft(true);
+    setActionFeedback(null);
+
+    try {
+      await persistSelectedDraft();
+      const result = await exportGeneratedDraft(token, selectedDraft.recordId);
+      const normalized = normalizeGeneratedDraft(result.draft);
+
+      setDrafts((current) =>
+        current.map((draft) => (draft.id === normalized.id ? normalized : draft))
+      );
+
+      const exportBody = [
+        result.exportPayload?.title || normalized.headline,
+        result.exportPayload?.body ||
+          `${normalized.headline}\n\n${normalized.body}\n\n${normalized.cta}`,
+        Array.isArray(result.exportPayload?.tags) ? result.exportPayload.tags.join(" ") : ""
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      await navigator.clipboard.writeText(exportBody);
+      setCopied(normalized.id);
+      setTimeout(() => setCopied(null), 1800);
+      setActionFeedback({
+        tone: "success",
+        title: "Export copy prepared",
+        body: "The export payload was saved to the database and copied to your clipboard."
+      });
+    } catch (error: any) {
+      setActionFeedback({
+        tone: "error",
+        title: "Unable to export draft",
+        body: error?.message || "The export step failed."
+      });
+    } finally {
+      setExportingDraft(false);
+    }
   }
 
   if (!selectedProject || !blueprint || !selectedRecommendation || !selectedConnection) {
@@ -572,6 +786,20 @@ export function PublishStudioPage({
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
+              {actionFeedback ? (
+                <div
+                  className={`rounded-3xl border px-5 py-4 text-sm leading-7 ${
+                    actionFeedback.tone === "success"
+                      ? "border-tide-200 bg-tide-50 text-tide-900"
+                      : actionFeedback.tone === "info"
+                        ? "border-sand-200 bg-sand-50 text-sand-900"
+                        : "border-coral-200 bg-coral-50 text-coral-900"
+                  }`}
+                >
+                  <p className="font-semibold">{actionFeedback.title}</p>
+                  <p className="mt-1">{actionFeedback.body}</p>
+                </div>
+              ) : null}
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="rounded-3xl bg-muted/70 p-5">
                   <p className="kicker">Why this works</p>
@@ -590,6 +818,11 @@ export function PublishStudioPage({
                   <p className="mt-3 text-sm leading-7 text-foreground">
                     {selectedConnection.status}. {selectedConnection.fallback}
                   </p>
+                  {selectedDraft?.status ? (
+                    <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                      Draft status: {selectedDraft.status}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
@@ -661,6 +894,11 @@ export function PublishStudioPage({
                         <p className="mt-1 text-muted-foreground">{selectedRecommendation.format}</p>
                       </div>
                     </div>
+                    {selectedDraft.publishedAt ? (
+                      <p className="mt-4 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                        Published {new Date(selectedDraft.publishedAt).toLocaleString()}
+                      </p>
+                    ) : null}
                   </div>
                 </>
               )}
@@ -762,8 +1000,14 @@ export function PublishStudioPage({
                 </div>
 
                 <div className="flex flex-col gap-3">
-                  <Button className="w-full" disabled={!selectedDraft}>
-                    {selectedConnection.status === "Connected" ? (
+                  <Button
+                    className="w-full"
+                    disabled={!selectedDraft || publishing}
+                    onClick={handlePublishAction}
+                  >
+                    {publishing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : selectedConnection.status === "Connected" ? (
                       <Send className="h-4 w-4" />
                     ) : (
                       <ExternalLink className="h-4 w-4" />
@@ -772,19 +1016,41 @@ export function PublishStudioPage({
                       ? "Publish now"
                       : selectedConnection.status === "Not connected"
                         ? `Connect ${selectedRecommendation.label}`
-                        : `Open ${selectedRecommendation.label} setup / export`}
+                        : selectedDraft?.id === "behance"
+                          ? "Prepare Behance export"
+                          : `Prepare ${selectedRecommendation.label} upload pack`}
                   </Button>
-                  <Button variant="outline" className="w-full">
-                    <CalendarClock className="h-4 w-4" />
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleScheduleDraft}
+                    disabled={!selectedDraft || scheduling}
+                  >
+                    {scheduling ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CalendarClock className="h-4 w-4" />
+                    )}
                     Schedule later
                   </Button>
-                  <Button variant="outline" className="w-full" onClick={handleCopy} disabled={!selectedDraft}>
-                    {copied === selectedDraft?.id ? (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={selectedDraft?.recordId ? handleExportDraft : handleCopy}
+                    disabled={!selectedDraft || exportingDraft}
+                  >
+                    {exportingDraft ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : copied === selectedDraft?.id ? (
                       <Check className="h-4 w-4" />
                     ) : (
                       <Copy className="h-4 w-4" />
                     )}
-                    {copied === selectedDraft?.id ? "Copied" : "Export copy + tags"}
+                    {exportingDraft
+                      ? "Preparing export"
+                      : copied === selectedDraft?.id
+                        ? "Copied"
+                        : "Export copy + tags"}
                   </Button>
                 </div>
               </CardContent>

@@ -16,6 +16,7 @@ const settingsRoutes = require("./routes/settings");
 const { configurePassport } = require("./config/passport");
 const { query } = require("./database/config");
 const { ensureSchema } = require("./database/ensure-schema");
+const { getErrorMessage } = require("./utils/errors");
 
 configurePassport();
 
@@ -70,7 +71,7 @@ app.get("/api/health/db", async (_req, res) => {
       service: "portfolio-ai-backend",
       database: {
         status: "error",
-        message: error.message
+        message: getErrorMessage(error, "Database check failed")
       }
     });
   }
@@ -81,7 +82,7 @@ app.use("/api", async (req, res, next) => {
     await ensureSchema();
     return next();
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: getErrorMessage(error) });
   }
 });
 
@@ -95,7 +96,7 @@ app.use("/api/settings", settingsRoutes);
 
 app.use((error, _req, res, _next) => {
   console.error(error);
-  res.status(500).json({ error: "Unexpected server error" });
+  res.status(500).json({ error: getErrorMessage(error) });
 });
 
 module.exports = app;

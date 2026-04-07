@@ -4,7 +4,12 @@ const { v4: uuidv4 } = require("uuid");
 
 const { pool } = require("../database/config");
 const { authenticateToken } = require("../middleware/auth");
-const { generatePortfolioDraft } = require("../services/ai");
+const {
+  buildProjectOutputs,
+  createProjectBuildStatus,
+  markProjectBuildFailed,
+  updateProjectBuildState
+} = require("../services/project-builder");
 const { storeProjectAsset } = require("../services/storage");
 
 const upload = multer({
@@ -55,6 +60,38 @@ async function getOwnedProject(projectId, userId) {
   return result.rows[0];
 }
 
+async function savePortfolioDraft(project, portfolioDraft) {
+  const publicSlug =
+    project.public_slug || `${slugify(project.title)}-${uuidv4().slice(0, 8)}`;
+
+  await pool.query(
+    `INSERT INTO portfolios (project_id, content_json, public_slug)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (project_id)
+     DO UPDATE SET
+       content_json = EXCLUDED.content_json,
+       public_slug = COALESCE(portfolios.public_slug, EXCLUDED.public_slug),
+       updated_at = CURRENT_TIMESTAMP`,
+    [project.id, JSON.stringify(portfolioDraft), publicSlug]
+  );
+
+  return publicSlug;
+}
+
+async function saveProjectAnalysis(projectId, objective, tone, analysis, recommendedAngles) {
+  await pool.query(
+    `INSERT INTO analysis_results (project_id, objective, tone, platform_scores, recommended_angles)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [
+      projectId,
+      objective,
+      tone,
+      JSON.stringify(analysis),
+      JSON.stringify(recommendedAngles)
+    ]
+  );
+}
+
 router.get("/public/:slug", async (req, res) => {
   try {
     const result = await pool.query(
@@ -97,6 +134,23 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.get("/:projectId/build-status", async (req, res) => {
+  try {
+    const project = await getOwnedProject(req.params.projectId, req.user.userId);
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    return res.json({
+      project,
+      buildStatus: createProjectBuildStatus(project)
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 router.get("/:projectId", async (req, res) => {
   try {
     const project = await getOwnedProject(req.params.projectId, req.user.userId);
@@ -124,7 +178,8 @@ router.get("/:projectId", async (req, res) => {
     return res.json({
       project,
       drafts: drafts.rows,
-      analysis: latestAnalysis.rows[0] || null
+      analysis: latestAnalysis.rows[0] || null,
+      buildStatus: createProjectBuildStatus(project)
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -149,13 +204,11 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
   if (!title) {
     return res.status(400).json({ error: "Project title is required" });
   }
-  let client;
+
+  let project = null;
 
   try {
-    client = await pool.connect();
-    await client.query("BEGIN");
-
-    const projectResult = await client.query(
+    const created = await pool.query(
       `INSERT INTO projects (
          user_id,
          title,
@@ -170,9 +223,12 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
          results_text,
          deliverables,
          assets_url,
-         testimonials
+         testimonials,
+         build_stage,
+         build_progress,
+         build_started_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'structuring', $8, $9, $10, $11, '[]'::jsonb, $12)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'structuring', $8, $9, $10, $11, '[]'::jsonb, $12, 'intake_captured', 12, CURRENT_TIMESTAMP)
        RETURNING *`,
       [
         req.user.userId,
@@ -190,59 +246,79 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
       ]
     );
 
+    project = created.rows[0];
+
     const storedAssets = await Promise.all(
       (req.files || []).map((file, index) =>
         storeProjectAsset({
           file,
           userId: req.user.userId,
-          projectId: projectResult.rows[0].id,
+          projectId: project.id,
           index
         })
       )
     );
 
-    const assetResult = await client.query(
-      `UPDATE projects
-       SET assets_url = $1,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2
-       RETURNING *`,
-      [JSON.stringify(storedAssets), projectResult.rows[0].id]
-    );
+    if (storedAssets.length) {
+      const assetResult = await pool.query(
+        `UPDATE projects
+         SET assets_url = $1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2
+         RETURNING *`,
+        [JSON.stringify(storedAssets), project.id]
+      );
 
-    const project = assetResult.rows[0];
-    const portfolioDraft = await generatePortfolioDraft(project);
-    const publicSlug = `${slugify(title)}-${uuidv4().slice(0, 8)}`;
+      project = assetResult.rows[0];
+    }
 
-    await client.query(
-      `INSERT INTO portfolios (project_id, content_json, public_slug)
-       VALUES ($1, $2, $3)`,
-      [project.id, JSON.stringify(portfolioDraft), publicSlug]
-    );
+    project = await updateProjectBuildState(pool, project.id, "assets_uploaded", {
+      status: "structuring"
+    });
+    project = await updateProjectBuildState(pool, project.id, "story_structuring", {
+      status: "structuring"
+    });
 
-    await client.query(
-      `UPDATE projects
-       SET status = 'ready', updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
-      [project.id]
-    );
+    const sourceProject = await getOwnedProject(project.id, req.user.userId);
+    const { portfolioDraft, analysis, objective, tone, recommendedAngles } =
+      await buildProjectOutputs(sourceProject);
 
-    await client.query("COMMIT");
+    project = await updateProjectBuildState(pool, project.id, "portfolio_composed", {
+      status: "structuring"
+    });
+
+    await savePortfolioDraft(sourceProject, portfolioDraft);
+
+    project = await updateProjectBuildState(pool, project.id, "platform_analysis", {
+      status: "structuring"
+    });
+
+    await saveProjectAnalysis(project.id, objective, tone, analysis, recommendedAngles);
+
+    project = await updateProjectBuildState(pool, project.id, "ready_for_review", {
+      status: "ready",
+      completed: true
+    });
 
     return res.status(201).json({
-      project: {
-        ...project,
-        status: "ready"
-      },
-      portfolioDraft
+      project,
+      portfolioDraft,
+      analysis,
+      buildStatus: createProjectBuildStatus(project)
     });
   } catch (error) {
-    if (client) {
-      await client.query("ROLLBACK");
+    if (project?.id) {
+      try {
+        project = await markProjectBuildFailed(pool, project.id, error);
+      } catch (updateError) {
+        console.error("Unable to mark project build failure", updateError);
+      }
     }
-    return res.status(500).json({ error: error.message });
-  } finally {
-    client?.release();
+
+    return res.status(500).json({
+      error: error.message,
+      buildStatus: project ? createProjectBuildStatus(project) : null
+    });
   }
 });
 
@@ -254,30 +330,37 @@ router.post("/:projectId/generate-portfolio", async (req, res) => {
       return res.status(404).json({ error: "Project not found" });
     }
 
-    const portfolioDraft = await generatePortfolioDraft(project);
+    let updatedProject = await updateProjectBuildState(pool, project.id, "story_structuring", {
+      status: "structuring",
+      completed: false
+    });
 
-    await pool.query(
-      `INSERT INTO portfolios (project_id, content_json, public_slug)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (project_id)
-       DO UPDATE SET
-         content_json = EXCLUDED.content_json,
-         updated_at = CURRENT_TIMESTAMP`,
-      [
-        project.id,
-        JSON.stringify(portfolioDraft),
-        `${slugify(project.title)}-${uuidv4().slice(0, 8)}`
-      ]
-    );
+    const sourceProject = await getOwnedProject(project.id, req.user.userId);
+    const { portfolioDraft, analysis, objective, tone, recommendedAngles } =
+      await buildProjectOutputs(sourceProject);
 
-    await pool.query(
-      `UPDATE projects
-       SET status = 'ready', updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
-      [project.id]
-    );
+    updatedProject = await updateProjectBuildState(pool, project.id, "portfolio_composed", {
+      status: "structuring"
+    });
 
-    return res.json({ portfolioDraft });
+    await savePortfolioDraft(sourceProject, portfolioDraft);
+
+    updatedProject = await updateProjectBuildState(pool, project.id, "platform_analysis", {
+      status: "structuring"
+    });
+
+    await saveProjectAnalysis(project.id, objective, tone, analysis, recommendedAngles);
+
+    updatedProject = await updateProjectBuildState(pool, project.id, "ready_for_review", {
+      status: "ready",
+      completed: true
+    });
+
+    return res.json({
+      portfolioDraft,
+      analysis,
+      buildStatus: createProjectBuildStatus(updatedProject)
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -294,8 +377,7 @@ router.put("/:projectId/portfolio", async (req, res) => {
     }
 
     const publicSlug =
-      project.public_slug ||
-      `${slugify(project.title)}-${uuidv4().slice(0, 8)}`;
+      project.public_slug || `${slugify(project.title)}-${uuidv4().slice(0, 8)}`;
 
     const result = await pool.query(
       `UPDATE portfolios
@@ -311,7 +393,12 @@ router.put("/:projectId/portfolio", async (req, res) => {
 
     await pool.query(
       `UPDATE projects
-       SET status = $1, updated_at = CURRENT_TIMESTAMP
+       SET status = $1,
+           build_stage = 'ready_for_review',
+           build_progress = 100,
+           build_completed_at = COALESCE(build_completed_at, CURRENT_TIMESTAMP),
+           last_build_error = NULL,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = $2`,
       [isPublished ? "published" : "ready", project.id]
     );

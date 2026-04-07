@@ -10,6 +10,7 @@ Onboard -> Create Project -> Build Portfolio -> Run Analysis -> Generate Platfor
 
 - Guided onboarding for account type, professional profile, channel presence, and first-goal setup
 - Project-first workspace with case-study generation, proof-point capture, and portfolio drafting
+- Staged project builder with upload preview, AI build progress, and final review state
 - Publish Studio for visible platform analysis, channel scoring, and content generation
 - Channel hub for LinkedIn, Dribbble, and Behance export-mode flows
 - Reviews and ratings workspace with AI-assisted response drafts
@@ -23,6 +24,7 @@ Onboard -> Create Project -> Build Portfolio -> Run Analysis -> Generate Platfor
 - Auth: Email/password + Google OAuth scaffold
 - Publishing: LinkedIn + Dribbble OAuth scaffolds, Behance export-first workflow
 - AI layer: Mock-first content and analysis services with optional external AI hooks
+- Project build lifecycle persisted on the project record (`build_stage`, `build_progress`, timestamps, failure state)
 
 ## App Sections
 
@@ -121,6 +123,7 @@ Supabase note:
 - `POST /api/auth/onboarding`
 - `GET /api/projects`
 - `GET /api/projects/:projectId`
+- `GET /api/projects/:projectId/build-status`
 - `POST /api/projects`
 - `PUT /api/projects/:projectId/portfolio`
 - `POST /api/amplify/:projectId/analyze`

@@ -341,7 +341,7 @@ router.post("/drafts/:draftId/publish", async (req, res) => {
 
     if (draft.platform === "linkedin") {
       const channelResult = await pool.query(
-        `SELECT platform_user_id, access_token, is_active
+        `SELECT platform_user_id, access_token, is_active, metadata
          FROM user_channels
          WHERE user_id = $1 AND platform = 'linkedin'
          LIMIT 1`,
@@ -354,6 +354,23 @@ router.post("/drafts/:draftId/publish", async (req, res) => {
         return res.status(409).json({
           error: "LinkedIn must be connected before direct publishing",
           mode: "connect-required"
+        });
+      }
+
+      const metadata =
+        channel.metadata && typeof channel.metadata === "object"
+          ? channel.metadata
+          : {};
+      const scope = String(metadata.scope || "").trim();
+      const canPublish =
+        metadata.canPublish === true ||
+        scope.split(/\s+/).includes("w_member_social");
+
+      if (!canPublish) {
+        return res.status(409).json({
+          error:
+            "LinkedIn is connected for sign-in only. Direct publishing needs LinkedIn posting approval and a posting-enabled token.",
+          mode: "permissions-required"
         });
       }
 

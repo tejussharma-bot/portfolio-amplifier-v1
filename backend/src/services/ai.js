@@ -2,12 +2,14 @@ const axios = require("axios");
 const { isPlaceholderValue } = require("../utils/config");
 
 function buildRemoteClient() {
-  if (!process.env.AI_SERVICE_URL || isPlaceholderValue(process.env.AI_API_KEY)) {
+  if (isPlaceholderValue(process.env.AI_API_KEY)) {
     return null;
   }
 
+  const baseURL = process.env.AI_SERVICE_URL || "https://api.openai.com/v1";
+
   return axios.create({
-    baseURL: process.env.AI_SERVICE_URL,
+    baseURL,
     headers: {
       Authorization: `Bearer ${process.env.AI_API_KEY}`,
       "Content-Type": "application/json"
