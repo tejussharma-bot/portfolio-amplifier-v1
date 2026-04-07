@@ -290,7 +290,7 @@ router.get("/linkedin", (req, res) => {
     response_type: "code",
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: "openid profile email",
+    scope: "openid profile email r_liteprofile r_emailaddress",
     state
   });
 
@@ -348,33 +348,46 @@ router.get("/linkedin/callback", async (req, res) => {
       });
     }
 
-    let userInfoResponse;
+    let linkedinProfile;
     try {
-      userInfoResponse = await axios.get("https://api.linkedin.com/v2/userinfo", {
+      const profileResponse = await axios.get("https://api.linkedin.com/v2/me", {
         headers: {
           Authorization: `Bearer ${tokenResponse.data.access_token}`
         }
       });
+      linkedinProfile = profileResponse.data;
     } catch (axiosError) {
-      console.error("LinkedIn user info fetch failed:", axiosError.response?.data || axiosError.message);
-      return res.status(400).json({ 
-        error: "Failed to get LinkedIn user information",
-        detail: "User info request failed"
+      console.error("LinkedIn profile fetch failed:", axiosError.response?.data || axiosError.message);
+      return res.status(400).json({
+        error: "Failed to get LinkedIn profile",
+        detail: "Profile request failed"
       });
     }
 
-    const linkedinProfile = userInfoResponse.data;
+    let email = null;
+    try {
+      const emailResponse = await axios.get(
+        "https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))",
+        {
+          headers: {
+            Authorization: `Bearer ${tokenResponse.data.access_token}`
+          }
+        }
+      );
+      email =
+        emailResponse.data?.elements?.[0]?.["handle~"]?.emailAddress ||
+        null;
+    } catch (emailError) {
+      // Email may not be available for all LinkedIn accounts.
+      email = null;
+    }
 
-    if (!linkedinProfile?.sub) {
+    if (!linkedinProfile?.id) {
       return res.status(500).send("LinkedIn authentication failed");
     }
 
-    const email = linkedinProfile.email
-      ? String(linkedinProfile.email).toLowerCase()
-      : null;
     const fullName =
-      linkedinProfile.name ||
-      [linkedinProfile.given_name, linkedinProfile.family_name]
+      [linkedinProfile.localizedFirstName, linkedinProfile.localizedLastName]
         .filter(Boolean)
         .join(" ") ||
       null;
@@ -405,17 +418,17 @@ router.get("/linkedin/callback", async (req, res) => {
            updated_at = CURRENT_TIMESTAMP`,
         [
           redirectState.userId,
-          linkedinProfile.sub,
+          linkedinProfile.id,
           tokenResponse.data.access_token,
           tokenResponse.data.expires_in
             ? new Date(Date.now() + Number(tokenResponse.data.expires_in) * 1000)
             : null,
           JSON.stringify({
-            scope: "openid profile email",
-            connectionMode: "identity-only",
-            canPublish: false,
+            scope: "openid profile email w_member_social r_liteprofile r_emailaddress",
+            connectionMode: "post-enabled",
+            canPublish: true,
             profile: {
-              sub: linkedinProfile.sub,
+              id: linkedinProfile.id,
               name: fullName,
               email
             }
@@ -436,7 +449,7 @@ router.get("/linkedin/callback", async (req, res) => {
 
     let userResult = await client.query(
       "SELECT * FROM users WHERE linkedin_id = $1 OR email = $2 LIMIT 1",
-      [linkedinProfile.sub, email]
+      [linkedinProfile.id, email]
     );
 
     if (!userResult.rows[0]) {
@@ -445,8 +458,8 @@ router.get("/linkedin/callback", async (req, res) => {
          VALUES ($1, $2, $3)
          RETURNING *`,
         [
-          email || `linkedin-${linkedinProfile.sub}@portfolio-amplifier.local`,
-          linkedinProfile.sub,
+          email || `linkedin-${linkedinProfile.id}@portfolio-amplifier.local`,
+          linkedinProfile.id,
           fullName
         ]
       );
@@ -459,7 +472,7 @@ router.get("/linkedin/callback", async (req, res) => {
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $4
          RETURNING *`,
-        [linkedinProfile.sub, email, fullName, userResult.rows[0].id]
+        [linkedinProfile.id, email, fullName, userResult.rows[0].id]
       );
     }
 

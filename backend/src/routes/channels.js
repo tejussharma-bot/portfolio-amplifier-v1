@@ -71,6 +71,10 @@ function normalizeReturnTo(value) {
   return value;
 }
 
+function encodeState(payload) {
+  return Buffer.from(JSON.stringify(payload)).toString("base64url");
+}
+
 function signOAuthState(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "10m" });
 }
@@ -192,12 +196,20 @@ router.get("/:platform/connect-url", authenticateToken, async (req, res) => {
     });
   }
 
-  const state = signOAuthState({
-    userId: req.user.userId,
-    platform,
-    mode: "channel-connect",
-    returnTo: normalizeReturnTo(req.query.returnTo)
-  });
+  const state =
+    platform === "linkedin"
+      ? encodeState({
+          userId: req.user.userId,
+          platform,
+          mode: "channel-connect",
+          returnTo: normalizeReturnTo(req.query.returnTo)
+        })
+      : signOAuthState({
+          userId: req.user.userId,
+          platform,
+          mode: "channel-connect",
+          returnTo: normalizeReturnTo(req.query.returnTo)
+        });
 
   if (platform === "linkedin") {
     const clientId = cleanEnvValue(process.env.LINKEDIN_CLIENT_ID);
@@ -208,7 +220,7 @@ router.get("/:platform/connect-url", authenticateToken, async (req, res) => {
       response_type: "code",
       client_id: clientId,
       redirect_uri: redirectUri,
-      scope: "openid profile email",
+      scope: "openid profile email w_member_social r_liteprofile r_emailaddress",
       state
     });
 
@@ -247,7 +259,7 @@ router.get("/linkedin/connect", authenticateToken, (req, res) => {
     return res.status(400).json({ error: "LinkedIn is not configured in environment variables" });
   }
 
-  const state = signOAuthState({
+  const state = encodeState({
     userId: req.user.userId,
     platform: "linkedin",
     mode: "channel-connect",
@@ -262,7 +274,7 @@ router.get("/linkedin/connect", authenticateToken, (req, res) => {
     response_type: "code",
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: "openid profile email",
+    scope: "openid profile email w_member_social r_liteprofile r_emailaddress",
     state
   });
 

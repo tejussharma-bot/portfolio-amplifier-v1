@@ -84,15 +84,18 @@ function buildExportPayload(draft, project) {
 }
 
 async function publishToLinkedIn({ accessToken, personId, text }) {
-  // Validate personId format (should be numeric)
-  if (!personId || !/^\d+$/.test(String(personId))) {
-    throw new Error("Invalid LinkedIn person ID format");
+  const author = String(personId).startsWith("urn:li:person:")
+    ? String(personId)
+    : `urn:li:person:${personId}`;
+
+  if (!author.startsWith("urn:li:person:")) {
+    throw new Error("Invalid LinkedIn author identifier");
   }
 
   const response = await axios.post(
     "https://api.linkedin.com/v2/ugcPosts",
     {
-      author: `urn:li:person:${personId}`,
+      author,
       lifecycleState: "PUBLISHED",
       specificContent: {
         "com.linkedin.ugc.ShareContent": {
