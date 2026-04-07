@@ -15,7 +15,8 @@ import {
   Sparkles,
   Wand2,
   Download,
-  Share2
+  Share2,
+  MapPin
 } from "lucide-react";
 
 import { useAuth } from "@/components/providers/auth-provider";
@@ -63,7 +64,8 @@ import {
 const platformIcons = {
   linkedin: Linkedin,
   behance: Palette,
-  dribbble: Sparkles
+  dribbble: Sparkles,
+  googlemybusiness: MapPin
 };
 
 type StudioProjectStatus =
@@ -834,7 +836,7 @@ export function PublishStudioPage({
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {(["linkedin", "behance", "dribbble"] as PlatformId[]).map((platform) => {
+                  {(["linkedin", "behance", "dribbble", "googlemybusiness"] as PlatformId[]).map((platform) => {
                     const Icon = platformIcons[platform];
                     const existingDraft = drafts.find((draft) => draft.id === platform);
 
@@ -849,7 +851,7 @@ export function PublishStudioPage({
                         onClick={() => setSelectedChannelId(platform)}
                       >
                         <Icon className="h-4 w-4" />
-                        {existingDraft?.label || (platform === "linkedin" ? "LinkedIn" : platform === "behance" ? "Behance" : "Dribbble")}
+                        {existingDraft?.label || (platform === "linkedin" ? "LinkedIn" : platform === "behance" ? "Behance" : platform === "dribbble" ? "Dribbble" : "Google My Business")}
                       </button>
                     );
                   })}
@@ -913,7 +915,7 @@ export function PublishStudioPage({
                     ) : (
                       <Sparkles className="h-4 w-4" />
                     )}
-                    Generate {selectedChannelId === "linkedin" ? "LinkedIn" : selectedChannelId === "behance" ? "Behance" : "Dribbble"} draft
+                    Generate {selectedChannelId === "linkedin" ? "LinkedIn" : selectedChannelId === "behance" ? "Behance" : selectedChannelId === "dribbble" ? "Dribbble" : "Google My Business"} draft
                   </Button>
                 </div>
               ) : (

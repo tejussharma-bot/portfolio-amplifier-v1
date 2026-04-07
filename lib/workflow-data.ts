@@ -1,4 +1,4 @@
-export type PlatformId = "linkedin" | "behance" | "dribbble";
+export type PlatformId = "linkedin" | "behance" | "dribbble" | "googlemybusiness";
 
 export interface PlatformRecommendation {
   platform: PlatformId;
@@ -105,6 +105,21 @@ export const channelConnections: ChannelConnection[] = [
       "Reconnect OAuth before attempting direct publishing.",
       "Lead with one hero screen instead of a full narrative.",
       "Route traffic back to the hosted portfolio or Behance story."
+    ]
+  },
+  {
+    id: "googlemybusiness",
+    name: "Google My Business",
+    status: "Not connected",
+    description: "Local business visibility and customer engagement through Google listings.",
+    permissions: ["Business profile access", "Post to Google"],
+    lastSync: "Connect to enable local business posting",
+    fallback: "Connect first, then post directly to your Google Business Profile.",
+    checklist: [
+      "Connect the Google My Business account you manage.",
+      "Verify you have posting permissions for the business.",
+      "Use for local SEO and customer engagement.",
+      "Include calls-to-action and business updates."
     ]
   }
 ];

@@ -121,6 +121,49 @@ async function publishToLinkedIn({ accessToken, personId, text }) {
   return response.headers["x-restli-id"] || response.data?.id || null;
 }
 
+async function publishToGoogleMyBusiness({ accessToken, accountId, text }) {
+  // First get the business locations
+  const locationsResponse = await axios.get(
+    `https://mybusinessbusinessinformation.googleapis.com/v1/${accountId}/locations`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      },
+      params: {
+        pageSize: 1
+      }
+    }
+  );
+
+  if (!locationsResponse.data.locations || locationsResponse.data.locations.length === 0) {
+    throw new Error("No business locations found for this account");
+  }
+
+  const locationId = locationsResponse.data.locations[0].name;
+
+  // Create a post
+  const postResponse = await axios.post(
+    `https://mybusiness.googleapis.com/v4/${locationId}/localPosts`,
+    {
+      languageCode: "en-US",
+      summary: text.length > 1500 ? text.substring(0, 1500) + "..." : text,
+      callToAction: {
+        actionType: "LEARN_MORE",
+        url: "https://portfolio-amplifier-v1.vercel.app"
+      },
+      topicType: "STANDARD"
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+
+  return postResponse.data.name || null;
+}
+
 router.post("/:projectId/analyze", async (req, res) => {
   const { objective = "Get clients", tone = "Professional" } = req.body;
 
@@ -409,6 +452,56 @@ router.post("/drafts/:draftId/publish", async (req, res) => {
       return res.json({
         mode: "direct",
         message: "Published to LinkedIn",
+        draft: result.rows[0],
+        externalPostId
+      });
+    }
+
+    if (draft.platform === "googlemybusiness") {
+      const channelResult = await pool.query(
+        `SELECT platform_user_id, access_token, token_expires_at, is_active, metadata
+         FROM user_channels
+         WHERE user_id = $1 AND platform = 'googlemybusiness'
+         LIMIT 1`,
+        [req.user.userId]
+      );
+
+      const channel = channelResult.rows[0];
+
+      if (!channel?.is_active || !channel.access_token || !channel.platform_user_id) {
+        return res.status(409).json({
+          error: "Google My Business must be connected before direct publishing",
+          mode: "connect-required"
+        });
+      }
+
+      // Check if token is expired
+      if (channel.token_expires_at && new Date(channel.token_expires_at) <= new Date()) {
+        return res.status(401).json({
+          error: "Google My Business token has expired. Please reconnect your account.",
+          mode: "token-expired"
+        });
+      }
+
+      const externalPostId = await publishToGoogleMyBusiness({
+        accessToken: channel.access_token,
+        accountId: channel.platform_user_id,
+        text: buildDraftText(draft.draft_data || {})
+      });
+
+      const result = await pool.query(
+        `UPDATE generated_content
+         SET status = 'published',
+             published_at = CURRENT_TIMESTAMP,
+             external_post_id = $1
+         WHERE id = $2
+         RETURNING *`,
+        [externalPostId, draft.id]
+      );
+
+      return res.json({
+        mode: "direct",
+        message: "Published to Google My Business",
         draft: result.rows[0],
         externalPostId
       });

@@ -302,7 +302,7 @@ export async function fetchChannelStatus(token: string) {
 
 export async function fetchConnectUrl(
   token: string,
-  platform: "linkedin" | "dribbble",
+  platform: "linkedin" | "dribbble" | "googlemybusiness",
   returnTo?: string
 ) {
   const params = new URLSearchParams();
@@ -317,8 +317,13 @@ export async function fetchConnectUrl(
   );
 }
 
-export async function fetchBehanceExportTemplate(token: string) {
-  return apiRequest<any>("/api/channels/behance/export-template", { token });
+export async function fetchBehanceExportTemplate(token: string, projectId?: string) {
+  const params = new URLSearchParams();
+  if (projectId) {
+    params.append('projectId', projectId);
+  }
+  const queryString = params.toString() ? `?${params.toString()}` : '';
+  return apiRequest<any>(`/api/channels/behance/export-template${queryString}`, { token });
 }
 
 export async function generateSocialContent(
