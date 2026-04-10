@@ -1,5 +1,6 @@
 const axios = require("axios");
 const { isPlaceholderValue } = require("../utils/config");
+const { parseStoredArray } = require("../utils/json");
 
 function detectAIService() {
   const apiKey = process.env.AI_API_KEY;
@@ -136,41 +137,6 @@ async function requestText(systemPrompt, userPrompt, options = {}) {
   }
 }
 
-async function generateImage(prompt, options = {}) {
-  const service = detectAIService();
-
-  if (service === 'openai' || !process.env.AI_SERVICE_URL?.includes('anthropic')) {
-    // Use OpenAI DALL-E for image generation
-    const client = axios.create({
-      baseURL: "https://api.openai.com/v1",
-      headers: {
-        Authorization: `Bearer ${process.env.AI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      timeout: 30000
-    });
-
-    try {
-      const response = await client.post("/images/generations", {
-        model: "dall-e-3",
-        prompt: prompt,
-        size: options.size || "1024x1024",
-        quality: options.quality || "standard",
-        n: 1
-      });
-
-      return response.data?.data?.[0]?.url || null;
-    } catch (error) {
-      console.warn("Image generation failed:", error.message);
-      return null;
-    }
-  }
-
-  // For Claude, we'll use text-to-image via another service or fallback
-  console.warn("Image generation not supported for Claude API yet");
-  return null;
-}
-
 async function generateSocialContent(projectData, platform, tone = "professional") {
   const systemPrompt = `You are a social media content strategist specializing in portfolio case studies.
 Create engaging ${platform} content that showcases project achievements and attracts potential clients.
@@ -208,57 +174,8 @@ Create a compelling post that would convert viewers into leads.`;
   });
 }
 
-async function generateImagePrompt(projectData, style = "professional") {
-  const systemPrompt = `You are a visual content strategist. Create detailed, professional image generation prompts for portfolio case studies.
-
-Focus on:
-- Clean, modern design aesthetics
-- Professional color palettes
-- Clear visual hierarchy
-- Brand-appropriate styling
-- High-quality, commercial feel
-
-Style guidelines:
-- Professional: Clean, corporate, trustworthy
-- Creative: Bold, artistic, innovative
-- Minimal: Simple, elegant, sophisticated
-- Tech: Modern, digital, futuristic`;
-
-  const userPrompt = `Create a detailed image generation prompt for this project:
-
-Project: ${projectData.title}
-Client: ${projectData.client_name}
-Industry: ${projectData.industry || "Technology"}
-Challenge: ${projectData.challenge_text?.substring(0, 100)}...
-Solution: ${projectData.solution_text?.substring(0, 100)}...
-Results: ${projectData.results_text?.substring(0, 100)}...
-Style: ${style}
-
-Generate a prompt that would create a stunning portfolio showcase image.`;
-
-  return await requestText(systemPrompt, userPrompt, {
-    temperature: 0.7,
-    maxTokens: 500
-  });
-}
-
 function parseList(value) {
-  if (!value) {
-    return [];
-  }
-
-  if (Array.isArray(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
-  return [];
+  return parseStoredArray(value);
 }
 
 async function generatePortfolioDraft(project) {
@@ -308,7 +225,7 @@ async function analyzeProjectFit(project, options = {}) {
 
   const hasMetrics = Boolean(project.results_text);
   const deliverableCount = parseList(project.deliverables).length;
-  const assetCount = Array.isArray(project.assets_url) ? project.assets_url.length : 0;
+  const assetCount = parseList(project.assets_url).length;
 
   return {
     linkedin: {
@@ -343,13 +260,14 @@ async function analyzeProjectFit(project, options = {}) {
   };
 }
 
-async function generateChannelDraft({ project, platform, tone, objective }) {
+async function generateChannelDraft({ project, platform, tone, objective, hookHint }) {
   const remote = await requestJson(
     "Return JSON with headline, body, cta, tags, why_this_works.",
     `Generate a ${platform} draft for this project:\n${JSON.stringify({
       project,
       tone,
-      objective
+      objective,
+      hookHint
     })}`
   );
 
@@ -360,35 +278,65 @@ async function generateChannelDraft({ project, platform, tone, objective }) {
   const client = project.client_name || "the client";
   const resultLine =
     project.results_text || "a stronger narrative, cleaner proof, and a clearer market story";
+  const proofLine =
+    Array.isArray(project.proof_points) && project.proof_points.length
+      ? project.proof_points[0]
+      : resultLine;
+  const normalizedTags =
+    Array.isArray(project.tags) && project.tags.length
+      ? project.tags
+      : ["case study", "portfolio", platform];
+  const preferredHook =
+    hookHint || `How we turned ${project.title} into a stronger growth story for ${client}`;
 
   if (platform === "linkedin") {
     return {
-      headline: `How we turned ${project.title} into a stronger growth story for ${client}`,
-      body: `The challenge was not just shipping the work. It was turning the work into something decision-makers could understand fast.\n\nWe structured the story around the core challenge, the delivery logic, and the clearest proof point.\n\nResult: ${resultLine}.`,
+      headline: preferredHook,
+      body: `The challenge was not just shipping the work. It was turning the work into something decision-makers could understand fast.\n\nWe structured the story around the core challenge, the delivery logic, and the clearest proof point from the finished case study.\n\nResult: ${resultLine}.\n\nProof point: ${proofLine}.`,
       cta: objective === "Get clients"
         ? "If you want your next project to sell as clearly as it ships, let’s talk."
         : "Happy to share the framework behind this case study workflow.",
-      tags: ["#PortfolioStrategy", "#CaseStudy", "#ClientWork", "#LinkedIn"],
+      tags: normalizedTags.map((tag) => `#${String(tag).replace(/^#/, "").replace(/\s+/g, "")}`),
       why_this_works: `${tone} tone with an outcome-led opening and a practical CTA.`
+    };
+  }
+
+  if (platform === "googlemybusiness") {
+    return {
+      headline: hookHint || `${project.title} is now live`,
+      body: `${project.title} is now featured as a completed client case study. ${proofLine}.`,
+      cta: "Learn more",
+      tags: normalizedTags.slice(0, 4),
+      why_this_works: "Google Business copy stays short, outcome-led, and action-oriented."
     };
   }
 
   if (platform === "dribbble") {
     return {
-      headline: `${project.title} teaser`,
-      body: `A polished snapshot from ${project.title}, built to hint at the system without needing the full story in-frame.`,
+      headline: hookHint || `${project.title} teaser`,
+      body: `A polished snapshot from ${project.title}, built to hint at the system without needing the full story in-frame.\n\nSupporting angle: ${proofLine}.`,
       cta: "Full process and outcomes live in the portfolio case study.",
-      tags: ["design", "case study", "portfolio", "dribbble"],
+      tags: normalizedTags.slice(0, 4),
       why_this_works: "Dribbble stays visual-first and routes deeper context back to the project page."
     };
   }
 
+  if (platform === "behance") {
+    return {
+      headline: hookHint || project.title,
+      body: `A richer case study for ${client} that walks through the challenge, the solution path, the deliverables, and the outcome story.\n\nResults: ${resultLine}.\n\nRecommended section lead: ${proofLine}.`,
+      cta: "Use this export pack to publish the project manually with the recommended asset order.",
+      tags: normalizedTags.slice(0, 5),
+      why_this_works: "Behance copy stays process-rich and export-ready for V1."
+    };
+  }
+
   return {
-    headline: project.title,
-    body: `A richer case study for ${client} that walks through the challenge, the solution path, the deliverables, and the outcome story.\n\nResults: ${resultLine}.`,
-    cta: "Use this export pack to publish the project manually with the recommended asset order.",
-    tags: ["Behance", "Case Study", "Process", "Portfolio"],
-    why_this_works: "Behance copy stays process-rich and export-ready for V1."
+    headline: hookHint || project.title,
+    body: `${project.title} for ${client}. ${proofLine}.`,
+    cta: "Use this export pack to publish the project manually.",
+    tags: normalizedTags.slice(0, 4),
+    why_this_works: "The draft stays anchored in the saved case study instead of raw intake notes."
   };
 }
 
@@ -432,7 +380,6 @@ module.exports = {
   classifySentiment,
   detectAIService,
   generateChannelDraft,
-  generateImagePrompt,
   generatePortfolioDraft,
   generateReviewReply,
   generateSocialContent,

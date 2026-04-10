@@ -59,7 +59,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background text-on-surface">
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-slate-50/70 p-4 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col rounded-r-[2rem] bg-surface-container-low/92 p-4 backdrop-blur-xl transition-transform duration-300 lg:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -87,7 +87,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 className={cn(
                   "flex items-center gap-3 rounded-full px-4 py-3 text-sm transition-all duration-200",
                   active
-                    ? "bg-surface-container-lowest font-semibold text-primary shadow-panel"
+                    ? "bg-primary-fixed font-semibold text-primary shadow-panel"
                     : "text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
                 )}
                 onClick={() => setIsOpen(false)}
@@ -99,9 +99,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="mt-6 rounded-[1.5rem] bg-primary-fixed p-4">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Free plan</p>
-          <p className="mt-1 text-[11px] text-primary/65">Upgrade for unlimited storage</p>
+        <div className="mt-6 rounded-[1.5rem] bg-surface-container-lowest p-4 shadow-panel">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Subscription plan</p>
+          <p className="mt-1 text-[11px] text-on-surface-variant">Free tier • Upgrade for more storage</p>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/50">
             <div className="h-full w-[25%] rounded-full bg-[linear-gradient(135deg,#1c32df_0%,#3e51f7_100%)]" />
           </div>
@@ -117,7 +117,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       ) : null}
 
       <div className="lg:ml-64">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 bg-slate-50/80 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 bg-background/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <button
               aria-label="Open navigation"
@@ -137,8 +137,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link href="/dashboard/projects/new" className={buttonStyles({ size: "sm" })}>
-              + New Project
+            <Link href="/dashboard/projects/new" className={buttonStyles({ size: "sm", className: "rounded-full" })}>
+              + New Case Study
             </Link>
             <button className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container-low">
               <Bell className="h-5 w-5" />

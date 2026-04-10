@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Inter, Manrope } from "next/font/google";
+import { Inter, Space_Grotesk } from "next/font/google";
 
 import { AuthProvider } from "@/components/providers/auth-provider";
 
 import "./globals.css";
 
-const manrope = Manrope({
+const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-display"
 });
@@ -18,7 +18,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Portfolio Amplifier",
   description:
-    "Portfolio Amplifier turns work samples into case studies, channel-ready content, and reputation workflows."
+    "Portfolio Amplifier is an AI-assisted case study builder that turns project context into polished narratives and channel-ready publishing copy."
 };
 
 export default function RootLayout({
@@ -28,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${manrope.variable} ${inter.variable} [--font-label:var(--font-body)]`}>
+      <body className={`${spaceGrotesk.variable} ${inter.variable} [--font-label:var(--font-body)]`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

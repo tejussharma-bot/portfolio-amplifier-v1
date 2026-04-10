@@ -52,8 +52,7 @@ function getAuthProviderStatus() {
     ),
     linkedin: hasConfiguredCredentials(
       process.env.LINKEDIN_CLIENT_ID,
-      process.env.LINKEDIN_CLIENT_SECRET,
-      process.env.LINKEDIN_AUTH_REDIRECT_URI
+      process.env.LINKEDIN_CLIENT_SECRET
     )
   };
 }

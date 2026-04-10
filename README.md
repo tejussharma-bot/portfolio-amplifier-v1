@@ -16,9 +16,9 @@ It is built for freelancers, studios, and product teams who want to stop leaving
 - Automatically turn project details into polished portfolio content
 
 ### Generate publish-ready content
-- AI-powered social copy for LinkedIn, Behance, and Dribbble
-- Image concept prompts to speed creative asset production
+- AI-powered social copy for LinkedIn, Behance, Dribbble, and Google
 - Tone, format, and channel recommendations baked into every draft
+- Asset sourcing from uploaded files, external URLs, and reference imagery
 
 ### Publish with confidence
 - Channel scoring and distribution guidance show where your work will land best
@@ -41,7 +41,7 @@ A single workspace for platform analysis, draft generation, asset guidance, and 
 Turn client projects into rich portfolio stories with challenge > solution > results structure, deliverable capture, and proof-point tracking.
 
 ### AI-powered storytelling
-Use intelligent prompts to generate crisp social posts and visual direction while preserving your project voice and impact.
+Use intelligent prompts to generate crisp social posts while preserving your project voice and impact.
 
 ### Review + response workflows
 Keep client feedback in one place and auto-generate response drafts for faster issue resolution.
@@ -63,7 +63,7 @@ Keep client feedback in one place and auto-generate response drafts for faster i
 2. **Create a project** — add the brief, challenge, solution, results, and assets
 3. **Build portfolio** — generate structured case study content and proof points
 4. **Analyze fit** — get recommended channel angles and distribution advice
-5. **Generate content** — produce platform-specific copy and image prompts
+5. **Generate content** — produce platform-specific copy and asset recommendations
 6. **Publish / export** — prepare direct posts, guided uploads, or export-ready assets
 7. **Monitor reviews** — collect feedback and auto-draft smart responses
 
@@ -75,9 +75,9 @@ Keep client feedback in one place and auto-generate response drafts for faster i
 - Modern case-study builder with step-by-step project creation
 - AI content generation for marketing-ready social copy
 - Platform-specific strategy recommendations
-- Asset guidance and image prompt generation
+- Asset sourcing and reference imagery guidance
 - Review inbox with AI-assisted response drafts
-- LinkedIn, Behance, and Dribbble publishing workflows
+- LinkedIn, Behance, Dribbble, and Google publishing workflows
 - Demo-friendly mode for instant previews
 
 ---

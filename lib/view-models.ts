@@ -4,6 +4,7 @@ import {
   type ChannelConnection,
   type ProjectBlueprint
 } from "@/lib/workflow-data";
+import { parseJsonValue, parseStringList } from "@/lib/utils";
 
 export function formatDisplayDate(value?: string | null) {
   if (!value) {
@@ -43,6 +44,10 @@ export function mapStatusLabel(status?: string | null) {
 }
 
 export function normalizeProjectRow(row: any) {
+  const assets = parseJsonValue<any[]>(row.assets_url, []);
+  const deliverables = parseStringList(row.deliverables);
+  const testimonials = parseStringList(row.testimonials);
+  const portfolioContent = parseJsonValue<Record<string, unknown> | null>(row.content_json, null);
   const blueprint = getProjectBlueprint(String(row.id), row, row.analysis);
   const outcomes =
     blueprint.results.length > 0
@@ -64,15 +69,16 @@ export function normalizeProjectRow(row: any) {
     rawStatus: row.status,
     channels: [],
     outcomes,
-    assets: Array.isArray(row.assets_url) ? row.assets_url.length : 0,
+    assets: assets.length,
     reach: row.status === "published" ? "Live" : "Pending",
     lastGenerated: formatDisplayDate(row.updated_at || row.created_at),
     challengeText: row.challenge_text,
     solutionText: row.solution_text,
     resultsText: row.results_text,
-    deliverables: Array.isArray(row.deliverables) ? row.deliverables : [],
-    testimonials: Array.isArray(row.testimonials) ? row.testimonials : [],
-    portfolioContent: row.content_json || null,
+    deliverables,
+    testimonials,
+    assetsUrl: assets,
+    portfolioContent,
     buildStage: row.build_stage || null,
     buildProgress: typeof row.build_progress === "number" ? row.build_progress : 0,
     buildStartedAt: row.build_started_at || null,
@@ -107,7 +113,7 @@ export function normalizeProjectDetail(detail: {
 }
 
 export function normalizeGeneratedDraft(row: any) {
-  const data = row.draft_data || {};
+  const data = parseJsonValue<Record<string, any>>(row.draft_data, {});
   const tags = Array.isArray(data.tags)
     ? data.tags
     : Array.isArray(data.hashtags)
@@ -126,10 +132,12 @@ export function normalizeGeneratedDraft(row: any) {
         ? "LinkedIn"
         : row.platform === "behance"
           ? "Behance"
-          : "Dribbble",
+          : row.platform === "googlemybusiness"
+            ? "Google"
+            : "Dribbble",
     tone: row.tone || "Professional",
     fit: data.why_this_works || "Generated from the current project asset.",
-    connected: row.platform === "linkedin",
+    connected: Boolean(row.external_post_id || row.status === "published"),
     headline: data.headline || data.hook || row.platform,
     body: data.body || data.caption || "",
     cta: data.cta || "",
@@ -166,6 +174,7 @@ export function mergeChannelState(rows: any[]) {
 
       return {
         ...channel,
+        canPublishDirect: false,
         status: "Not connected",
         lastSync: "Not connected yet",
         fallback:
@@ -175,15 +184,30 @@ export function mergeChannelState(rows: any[]) {
       };
     }
 
+    const scopeLabels = Array.isArray(live.scope) && live.scope.length
+      ? live.scope
+      : channel.permissions;
+    const status = live.capability_state || channel.status;
+    const linkedAccount = live.linked_account || null;
+    const descriptionSuffix =
+      linkedAccount && status !== "Export only"
+        ? ` Connected as ${linkedAccount}.`
+        : "";
+
     return {
       ...channel,
-      status: live.is_active ? "Connected" : "Needs reconnect",
-      lastSync: live.token_expires_at
-        ? `Token expires ${formatDisplayDate(live.token_expires_at)}`
-        : channel.lastSync,
-      description: live.platform_user_id
-        ? `${channel.description} Connected as ${live.platform_user_id}.`
-        : channel.description
+      mode: live.mode || live.setup_mode || channel.mode,
+      canPublishDirect: Boolean(live.can_publish),
+      linkedAccount,
+      status,
+      lastSync: live.last_validated_at
+        ? `Validated ${formatDisplayDate(live.last_validated_at)}`
+        : live.expires_at || live.token_expires_at
+          ? `Token expires ${formatDisplayDate(live.expires_at || live.token_expires_at)}`
+          : channel.lastSync,
+      description: `${channel.description}${descriptionSuffix}`.trim(),
+      permissions: scopeLabels,
+      fallback: live.fallback_behavior || channel.fallback
     };
   });
 }

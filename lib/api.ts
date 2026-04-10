@@ -1,6 +1,32 @@
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
 
-export const API_URL = configuredApiUrl || "";
+function isLocalHostname(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function resolveApiUrl() {
+  if (!configuredApiUrl) {
+    return "";
+  }
+
+  if (typeof window === "undefined") {
+    return configuredApiUrl;
+  }
+
+  try {
+    const currentUrl = new URL(window.location.origin);
+    const apiUrl = new URL(configuredApiUrl, window.location.origin);
+    const isSameOrigin = apiUrl.origin === currentUrl.origin;
+    const isLocalDevTarget =
+      isLocalHostname(apiUrl.hostname) && isLocalHostname(currentUrl.hostname);
+
+    return isSameOrigin || isLocalDevTarget ? configuredApiUrl : "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+export const API_URL = resolveApiUrl();
 
 export class ApiError extends Error {
   status: number;
@@ -30,7 +56,7 @@ export async function apiRequest<T>(
   path: string,
   { token, headers, ...init }: RequestOptions = {}
 ): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${resolveApiUrl()}${path}`, {
     ...init,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -127,17 +153,36 @@ export async function fetchProjectDetail(token: string, projectId: string) {
 }
 
 export async function createProject(token: string, payload: any) {
+  const isMultipart = typeof FormData !== "undefined" && payload instanceof FormData;
+
   return apiRequest<{ project: any; portfolioDraft: any; analysis?: any | null; buildStatus?: any | null }>(
     "/api/projects",
     {
       method: "POST",
       token,
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
+      headers: isMultipart
+        ? undefined
+        : {
+            "Content-Type": "application/json"
+          },
+      body: isMultipart ? payload : JSON.stringify(payload)
     }
   );
+}
+
+export async function updateProject(
+  token: string,
+  projectId: string,
+  payload: Record<string, unknown>
+) {
+  return apiRequest<{ project: any }>(`/api/projects/${projectId}`, {
+    method: "PUT",
+    token,
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
 }
 
 export async function fetchProjectBuildStatus(token: string, projectId: string) {
@@ -184,6 +229,7 @@ export async function generateContent(
     tone: string;
     objective: string;
     contentType?: string;
+    hookHint?: string;
   }
 ) {
   return apiRequest<any>("/api/amplify/generate-content", {
@@ -335,23 +381,6 @@ export async function generateSocialContent(
   }
 ) {
   return apiRequest<{ content: string }>("/api/amplify/generate-social-content", {
-    method: "POST",
-    token,
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-}
-
-export async function generateImagePrompt(
-  token: string,
-  payload: {
-    projectId: string;
-    style?: string;
-  }
-) {
-  return apiRequest<{ prompt: string }>("/api/amplify/generate-image-prompt", {
     method: "POST",
     token,
     headers: {

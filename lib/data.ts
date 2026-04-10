@@ -435,13 +435,13 @@ export const projectDistributions: Record<string, ChannelDraft[]> = {
 export const settingsIntegrations = [
   {
     name: "LinkedIn",
-    status: "Connected",
+    status: "Connected - publish capable",
     detail: "OAuth token refreshed 3 days ago",
     tone: "success" as const
   },
   {
     name: "Behance",
-    status: "Export mode",
+    status: "Export only",
     detail: "Structured manual publish flow active",
     tone: "info" as const
   },

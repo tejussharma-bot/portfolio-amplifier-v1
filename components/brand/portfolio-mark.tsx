@@ -38,7 +38,7 @@ export function PortfolioMark({
               isLight ? "text-white/60" : "text-primary/70"
             )}
           >
-            Elite Creator
+            The Digital Curator
           </span>
         </span>
       ) : null}

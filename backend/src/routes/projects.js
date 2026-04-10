@@ -11,6 +11,7 @@ const {
   updateProjectBuildState
 } = require("../services/project-builder");
 const { storeProjectAsset } = require("../services/storage");
+const { parseJsonField, parseStoredArray } = require("../utils/json");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -21,24 +22,32 @@ const upload = multer({
 });
 const router = express.Router();
 
+function parseProjectRequest(req, res, next) {
+  if (req.is("multipart/form-data")) {
+    return upload.array("assets", 10)(req, res, next);
+  }
+
+  return next();
+}
+
 function parseJsonArray(value) {
-  if (!value) {
-    return [];
-  }
+  return parseStoredArray(value);
+}
 
-  if (Array.isArray(value)) {
-    return value;
-  }
+function normalizeAssetReferences(value) {
+  return parseStoredArray(value).map((entry) => {
+    if (typeof entry === "string") {
+      return {
+        sourceType: "url",
+        url: entry
+      };
+    }
 
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    return String(value)
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
+    return {
+      sourceType: entry.sourceType || "url",
+      ...entry
+    };
+  });
 }
 
 function slugify(value) {
@@ -186,7 +195,7 @@ router.get("/:projectId", async (req, res) => {
   }
 });
 
-router.post("/", upload.array("assets", 10), async (req, res) => {
+router.post("/", parseProjectRequest, async (req, res) => {
   const {
     title,
     client_name,
@@ -194,11 +203,17 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
     industry,
     timeline,
     source_url,
+    assets_url,
+    asset_urls,
+    asset_references,
     challenge,
     solution,
     results,
     deliverables,
-    testimonials
+    testimonials,
+    tags,
+    conversation_messages,
+    theme_id
   } = req.body;
 
   if (!title) {
@@ -248,7 +263,7 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
 
     project = created.rows[0];
 
-    const storedAssets = await Promise.all(
+    const uploadedAssets = await Promise.all(
       (req.files || []).map((file, index) =>
         storeProjectAsset({
           file,
@@ -258,6 +273,16 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
         })
       )
     );
+    const linkedAssets = normalizeAssetReferences(
+      asset_references || asset_urls || assets_url
+    );
+    const storedAssets = [
+      ...uploadedAssets.map((asset) => ({
+        sourceType: "uploaded",
+        ...asset
+      })),
+      ...linkedAssets
+    ];
 
     if (storedAssets.length) {
       const assetResult = await pool.query(
@@ -282,12 +307,37 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
     const sourceProject = await getOwnedProject(project.id, req.user.userId);
     const { portfolioDraft, analysis, objective, tone, recommendedAngles } =
       await buildProjectOutputs(sourceProject);
+    const serializedConversation = parseStoredArray(conversation_messages);
+    const themeId = String(theme_id || "luxury").trim() || "luxury";
+    const existingPortfolioContent = parseJsonField(sourceProject?.content_json, {}) || {};
+    const enrichedPortfolioDraft = {
+      ...portfolioDraft,
+      theme_id: themeId,
+      tags: parseStoredArray(tags),
+      conversation_messages: serializedConversation,
+      asset_sources: storedAssets,
+      preview_json: {
+        title: project.title,
+        client_name: project.client_name,
+        category: project.category,
+        tags: parseStoredArray(tags),
+        challenge: portfolioDraft.challenge,
+        solution: portfolioDraft.solution,
+        results: portfolioDraft.results,
+        deliverables: portfolioDraft.deliverables,
+        proof_points: portfolioDraft.proof_points,
+        testimonial:
+          parseStoredArray(project.testimonials)[0] || portfolioDraft.testimonial_prompt
+      },
+      publish_readiness: project.status === "ready" ? "ready" : "draft",
+      export_history: existingPortfolioContent.export_history || []
+    };
 
     project = await updateProjectBuildState(pool, project.id, "portfolio_composed", {
       status: "structuring"
     });
 
-    await savePortfolioDraft(sourceProject, portfolioDraft);
+    await savePortfolioDraft(sourceProject, enrichedPortfolioDraft);
 
     project = await updateProjectBuildState(pool, project.id, "platform_analysis", {
       status: "structuring"
@@ -302,7 +352,7 @@ router.post("/", upload.array("assets", 10), async (req, res) => {
 
     return res.status(201).json({
       project,
-      portfolioDraft,
+      portfolioDraft: enrichedPortfolioDraft,
       analysis,
       buildStatus: createProjectBuildStatus(project)
     });
@@ -338,12 +388,38 @@ router.post("/:projectId/generate-portfolio", async (req, res) => {
     const sourceProject = await getOwnedProject(project.id, req.user.userId);
     const { portfolioDraft, analysis, objective, tone, recommendedAngles } =
       await buildProjectOutputs(sourceProject);
+    const existingPortfolioContent = parseJsonField(sourceProject?.content_json, {}) || {};
+    const preservedTags = parseStoredArray(existingPortfolioContent.tags);
+    const preservedConversation = parseStoredArray(existingPortfolioContent.conversation_messages);
+    const preservedAssets = parseStoredArray(existingPortfolioContent.asset_sources || sourceProject.assets_url);
+    const enrichedPortfolioDraft = {
+      ...portfolioDraft,
+      theme_id: String(existingPortfolioContent.theme_id || "luxury"),
+      tags: preservedTags,
+      conversation_messages: preservedConversation,
+      asset_sources: preservedAssets,
+      preview_json: {
+        title: sourceProject.title,
+        client_name: sourceProject.client_name,
+        category: sourceProject.category,
+        tags: preservedTags,
+        challenge: portfolioDraft.challenge,
+        solution: portfolioDraft.solution,
+        results: portfolioDraft.results,
+        deliverables: portfolioDraft.deliverables,
+        proof_points: portfolioDraft.proof_points,
+        testimonial:
+          parseStoredArray(sourceProject.testimonials)[0] || portfolioDraft.testimonial_prompt
+      },
+      publish_readiness: existingPortfolioContent.publish_readiness || "draft",
+      export_history: existingPortfolioContent.export_history || []
+    };
 
     updatedProject = await updateProjectBuildState(pool, project.id, "portfolio_composed", {
       status: "structuring"
     });
 
-    await savePortfolioDraft(sourceProject, portfolioDraft);
+    await savePortfolioDraft(sourceProject, enrichedPortfolioDraft);
 
     updatedProject = await updateProjectBuildState(pool, project.id, "platform_analysis", {
       status: "structuring"
@@ -357,7 +433,7 @@ router.post("/:projectId/generate-portfolio", async (req, res) => {
     });
 
     return res.json({
-      portfolioDraft,
+      portfolioDraft: enrichedPortfolioDraft,
       analysis,
       buildStatus: createProjectBuildStatus(updatedProject)
     });

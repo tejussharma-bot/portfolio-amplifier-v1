@@ -1,9 +1,11 @@
 const express = require("express");
 const axios = require("axios");
 
+const { getChannelCapability } = require("../config/channel-capabilities");
 const { pool } = require("../database/config");
 const { authenticateToken } = require("../middleware/auth");
-const { analyzeProjectFit, generateChannelDraft, generateImagePrompt, generateSocialContent, requestText } = require("../services/ai");
+const { analyzeProjectFit, generateChannelDraft, generateSocialContent, requestText } = require("../services/ai");
+const { parseJsonField, parseStoredArray } = require("../utils/json");
 
 const router = express.Router();
 
@@ -11,7 +13,16 @@ router.use(authenticateToken);
 
 async function getOwnedProject(projectId, userId) {
   const result = await pool.query(
-    "SELECT * FROM projects WHERE id = $1 AND user_id = $2",
+    `SELECT p.*,
+            pf.id AS portfolio_id,
+            pf.content_json,
+            pf.updated_at AS portfolio_updated_at,
+            pf.is_published,
+            pf.public_slug
+     FROM projects p
+     LEFT JOIN portfolios pf ON pf.project_id = p.id
+     WHERE p.id = $1 AND p.user_id = $2
+     LIMIT 1`,
     [projectId, userId]
   );
 
@@ -21,9 +32,14 @@ async function getOwnedProject(projectId, userId) {
 async function getOwnedDraft(draftId, userId) {
   const result = await pool.query(
     `SELECT gc.*, p.user_id, p.title AS project_title, p.client_name, p.results_text,
-            p.challenge_text, p.solution_text, p.deliverables, p.assets_url, p.source_url
+            p.challenge_text, p.solution_text, p.deliverables, p.assets_url, p.source_url,
+            p.category, p.industry, p.timeline, p.testimonials,
+            pf.id AS portfolio_id,
+            pf.content_json,
+            pf.updated_at AS current_portfolio_updated_at
      FROM generated_content gc
      INNER JOIN projects p ON p.id = gc.project_id
+     LEFT JOIN portfolios pf ON pf.project_id = p.id
      WHERE gc.id = $1 AND p.user_id = $2
      LIMIT 1`,
     [draftId, userId]
@@ -32,11 +48,162 @@ async function getOwnedDraft(draftId, userId) {
   return result.rows[0];
 }
 
+function parseString(value) {
+  return String(value || "").trim();
+}
+
+function normalizeList(value) {
+  return parseStoredArray(value)
+    .map((item) => {
+      if (typeof item === "string") {
+        return item.trim();
+      }
+
+      if (item && typeof item === "object") {
+        if (typeof item.label === "string") {
+          return item.label.trim();
+        }
+
+        if (typeof item.url === "string") {
+          return item.url.trim();
+        }
+      }
+
+      return String(item || "").trim();
+    })
+    .filter(Boolean);
+}
+
+function buildCaseStudySource(record) {
+  const snapshot = parseJsonField(record?.portfolio_snapshot, {}) || {};
+  const content = Object.keys(snapshot).length
+    ? snapshot
+    : parseJsonField(record?.content_json, {}) || {};
+  const sourceDocument = parseJsonField(content.source_document, {}) || {};
+  const preview = parseJsonField(content.preview_json, {}) || {};
+  const deliverables =
+    normalizeList(sourceDocument.deliverables).length
+      ? normalizeList(sourceDocument.deliverables)
+      : normalizeList(content.deliverables).length
+        ? normalizeList(content.deliverables)
+        : normalizeList(record?.deliverables);
+  const proofPoints =
+    normalizeList(sourceDocument.proof_points).length
+      ? normalizeList(sourceDocument.proof_points)
+      : normalizeList(content.proof_points).length
+        ? normalizeList(content.proof_points)
+        : normalizeList(record?.results_text);
+  const assets =
+    parseStoredArray(sourceDocument.assets_url).length
+      ? parseStoredArray(sourceDocument.assets_url)
+      : parseStoredArray(content.asset_sources).length
+        ? parseStoredArray(content.asset_sources)
+        : parseStoredArray(record?.assets_url);
+  const tags =
+    normalizeList(sourceDocument.tags).length
+      ? normalizeList(sourceDocument.tags)
+      : normalizeList(content.tags);
+  const testimonials = normalizeList(record?.testimonials);
+  const testimonial =
+    parseString(sourceDocument.testimonial) ||
+    parseString(content.testimonial) ||
+    parseString(content.testimonial_prompt) ||
+    parseString(testimonials[0]);
+
+  return {
+    title:
+      parseString(sourceDocument.title) ||
+      parseString(preview.title) ||
+      parseString(record?.project_title) ||
+      parseString(record?.title) ||
+      "Untitled case study",
+    client_name:
+      parseString(sourceDocument.client_name) ||
+      parseString(preview.client_name) ||
+      parseString(record?.client_name),
+    category:
+      parseString(sourceDocument.category) ||
+      parseString(preview.category) ||
+      parseString(record?.category) ||
+      "Case Study",
+    industry:
+      parseString(sourceDocument.industry) ||
+      parseString(preview.industry) ||
+      parseString(record?.industry),
+    timeline:
+      parseString(sourceDocument.timeline) ||
+      parseString(preview.timeline) ||
+      parseString(record?.timeline),
+    source_url:
+      parseString(sourceDocument.source_url) ||
+      parseString(preview.source_url) ||
+      parseString(record?.source_url),
+    hero_summary:
+      parseString(sourceDocument.hero_summary) ||
+      parseString(preview.hero_summary) ||
+      parseString(content.hero_summary),
+    challenge_text:
+      parseString(sourceDocument.challenge) ||
+      parseString(preview.challenge) ||
+      parseString(content.challenge) ||
+      parseString(record?.challenge_text),
+    solution_text:
+      parseString(sourceDocument.solution) ||
+      parseString(preview.solution) ||
+      parseString(content.solution) ||
+      parseString(record?.solution_text),
+    results_text:
+      parseString(sourceDocument.results) ||
+      parseString(preview.results) ||
+      parseString(content.results) ||
+      parseString(record?.results_text),
+    deliverables,
+    proof_points: proofPoints,
+    testimonial,
+    tags,
+    assets_url: assets,
+    content_json: content,
+    portfolio_id: record?.portfolio_id || null,
+    portfolio_updated_at:
+      record?.source_portfolio_updated_at ||
+      record?.portfolio_updated_at ||
+      record?.current_portfolio_updated_at ||
+      null
+  };
+}
+
+function buildPortfolioSnapshot(source) {
+  const existing = parseJsonField(source.content_json, {}) || {};
+
+  return {
+    ...existing,
+    source_document: {
+      title: source.title,
+      client_name: source.client_name,
+      category: source.category,
+      industry: source.industry,
+      timeline: source.timeline,
+      source_url: source.source_url,
+      hero_summary: source.hero_summary,
+      challenge: source.challenge_text,
+      solution: source.solution_text,
+      results: source.results_text,
+      deliverables: source.deliverables,
+      proof_points: source.proof_points,
+      testimonial: source.testimonial,
+      tags: source.tags,
+      assets_url: source.assets_url
+    }
+  };
+}
+
 function buildDraftText(draftData) {
+  const normalizedDraftData = parseJsonField(draftData, draftData) || {};
+
   return [
-    draftData?.headline || draftData?.hook || "",
-    draftData?.body || draftData?.caption || "",
-    draftData?.cta || ""
+    normalizedDraftData?.headline || normalizedDraftData?.hook || "",
+    normalizedDraftData?.body || normalizedDraftData?.caption || "",
+    normalizedDraftData?.cta || ""
   ]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
@@ -44,46 +211,52 @@ function buildDraftText(draftData) {
 }
 
 function normalizeTags(draftData) {
-  if (Array.isArray(draftData?.tags)) {
-    return draftData.tags;
+  const normalizedDraftData = parseJsonField(draftData, draftData) || {};
+
+  if (Array.isArray(normalizedDraftData?.tags)) {
+    return normalizedDraftData.tags;
   }
 
-  if (Array.isArray(draftData?.hashtags)) {
-    return draftData.hashtags;
+  if (Array.isArray(normalizedDraftData?.hashtags)) {
+    return normalizedDraftData.hashtags;
   }
 
-  if (typeof draftData?.tags === "string") {
-    return draftData.tags.split(",").map((item) => item.trim()).filter(Boolean);
+  if (typeof normalizedDraftData?.tags === "string") {
+    return normalizedDraftData.tags.split(",").map((item) => item.trim()).filter(Boolean);
   }
 
-  if (typeof draftData?.hashtags === "string") {
-    return draftData.hashtags.split(" ").filter(Boolean);
+  if (typeof normalizedDraftData?.hashtags === "string") {
+    return normalizedDraftData.hashtags.split(" ").filter(Boolean);
   }
 
   return [];
 }
 
-function buildExportPayload(draft, project) {
-  const draftData = draft.draft_data || {};
+function buildExportPayload(draft, caseStudySource) {
+  const draftData = parseJsonField(draft.draft_data, {}) || {};
 
   return {
     platform: draft.platform,
-    title: draftData.headline || project.project_title,
+    title: draftData.headline || caseStudySource.title,
     body: buildDraftText(draftData),
     tags: normalizeTags(draftData),
     objective: draft.objective,
     tone: draft.tone,
     guidance: {
       recommendedFormat: draft.content_type,
-      sourceUrl: project.source_url,
-      results: project.results_text,
-      deliverables: project.deliverables || [],
-      assetCount: Array.isArray(project.assets_url) ? project.assets_url.length : 0
+      sourceUrl: caseStudySource.source_url,
+      heroSummary: caseStudySource.hero_summary,
+      results: caseStudySource.results_text,
+      deliverables: caseStudySource.deliverables,
+      proofPoints: caseStudySource.proof_points,
+      testimonial: caseStudySource.testimonial,
+      assetCount: parseStoredArray(caseStudySource.assets_url).length
     }
   };
 }
 
 async function publishToLinkedIn({ accessToken, personId, text }) {
+  const capability = getChannelCapability("linkedin");
   const author = String(personId).startsWith("urn:li:person:")
     ? String(personId)
     : `urn:li:person:${personId}`;
@@ -93,27 +266,25 @@ async function publishToLinkedIn({ accessToken, personId, text }) {
   }
 
   const response = await axios.post(
-    "https://api.linkedin.com/v2/ugcPosts",
+    `${capability.apiBaseUrl}/posts`,
     {
       author,
-      lifecycleState: "PUBLISHED",
-      specificContent: {
-        "com.linkedin.ugc.ShareContent": {
-          shareCommentary: {
-            text
-          },
-          shareMediaCategory: "NONE"
-        }
+      commentary: text,
+      visibility: "PUBLIC",
+      distribution: {
+        feedDistribution: "MAIN_FEED",
+        targetEntities: [],
+        thirdPartyDistributionChannels: []
       },
-      visibility: {
-        "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-      }
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false
     },
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
-        "X-Restli-Protocol-Version": "2.0.0"
+        "X-Restli-Protocol-Version": capability.requiredHeaders["X-Restli-Protocol-Version"],
+        [capability.apiVersionHeader.name]: capability.apiVersionHeader.value
       }
     }
   );
@@ -122,7 +293,6 @@ async function publishToLinkedIn({ accessToken, personId, text }) {
 }
 
 async function publishToGoogleMyBusiness({ accessToken, accountId, text }) {
-  // First get the business locations
   const locationsResponse = await axios.get(
     `https://mybusinessbusinessinformation.googleapis.com/v1/${accountId}/locations`,
     {
@@ -141,7 +311,6 @@ async function publishToGoogleMyBusiness({ accessToken, accountId, text }) {
 
   const locationId = locationsResponse.data.locations[0].name;
 
-  // Create a post
   const postResponse = await axios.post(
     `https://mybusiness.googleapis.com/v4/${locationId}/localPosts`,
     {
@@ -174,7 +343,7 @@ router.post("/:projectId/analyze", async (req, res) => {
       return res.status(404).json({ error: "Project not found" });
     }
 
-    const analysis = await analyzeProjectFit(project, { objective, tone });
+    const analysis = await analyzeProjectFit(buildCaseStudySource(project), { objective, tone });
     const recommendedAngles = Object.entries(analysis).map(([platform, details]) => ({
       platform,
       angle: details.angle,
@@ -212,7 +381,8 @@ router.post("/generate-content", async (req, res) => {
     platform,
     tone = "Professional",
     objective = "Get clients",
-    contentType = "post"
+    contentType = "post",
+    hookHint
   } = req.body;
 
   if (!projectId || !platform) {
@@ -226,12 +396,15 @@ router.post("/generate-content", async (req, res) => {
       return res.status(404).json({ error: "Project not found" });
     }
 
+    const caseStudySource = buildCaseStudySource(project);
     const draft = await generateChannelDraft({
-      project,
+      project: caseStudySource,
       platform,
       tone,
-      objective
+      objective,
+      hookHint
     });
+    const portfolioSnapshot = buildPortfolioSnapshot(caseStudySource);
 
     const result = await pool.query(
       `INSERT INTO generated_content (
@@ -240,11 +413,23 @@ router.post("/generate-content", async (req, res) => {
          tone,
          platform,
          content_type,
-         draft_data
+         draft_data,
+         status,
+         portfolio_snapshot,
+         source_portfolio_updated_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, $5, $6, 'draft', $7, $8)
        RETURNING *`,
-      [project.id, objective, tone, platform, contentType, JSON.stringify(draft)]
+      [
+        project.id,
+        objective,
+        tone,
+        platform,
+        contentType,
+        JSON.stringify(draft),
+        JSON.stringify(portfolioSnapshot),
+        caseStudySource.portfolio_updated_at
+      ]
     );
 
     return res.status(201).json(result.rows[0]);
@@ -362,7 +547,7 @@ router.post("/drafts/:draftId/export", async (req, res) => {
       return res.status(404).json({ error: "Draft not found" });
     }
 
-    const exportPayload = buildExportPayload(draft, draft);
+    const exportPayload = buildExportPayload(draft, buildCaseStudySource(draft));
     const result = await pool.query(
       `UPDATE generated_content
        SET export_payload = $1,
@@ -408,7 +593,6 @@ router.post("/drafts/:draftId/publish", async (req, res) => {
         });
       }
 
-      // Check if token is expired
       if (channel.token_expires_at && new Date(channel.token_expires_at) <= new Date()) {
         return res.status(401).json({
           error: "LinkedIn token has expired. Please reconnect your LinkedIn account.",
@@ -416,10 +600,7 @@ router.post("/drafts/:draftId/publish", async (req, res) => {
         });
       }
 
-      const metadata =
-        channel.metadata && typeof channel.metadata === "object"
-          ? channel.metadata
-          : {};
+      const metadata = parseJsonField(channel.metadata, {}) || {};
       const scope = String(metadata.scope || "").trim();
       const canPublish =
         metadata.canPublish === true ||
@@ -475,7 +656,6 @@ router.post("/drafts/:draftId/publish", async (req, res) => {
         });
       }
 
-      // Check if token is expired
       if (channel.token_expires_at && new Date(channel.token_expires_at) <= new Date()) {
         return res.status(401).json({
           error: "Google My Business token has expired. Please reconnect your account.",
@@ -507,7 +687,7 @@ router.post("/drafts/:draftId/publish", async (req, res) => {
       });
     }
 
-    const exportPayload = buildExportPayload(draft, draft);
+    const exportPayload = buildExportPayload(draft, buildCaseStudySource(draft));
     const result = await pool.query(
       `UPDATE generated_content
        SET export_payload = $1,
@@ -553,31 +733,9 @@ router.post("/generate-social-content", async (req, res) => {
       return res.status(404).json({ error: "Project not found" });
     }
 
-    const content = await generateSocialContent(project, platform, tone);
+    const content = await generateSocialContent(buildCaseStudySource(project), platform, tone);
 
     return res.json({ content });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-router.post("/generate-image-prompt", async (req, res) => {
-  const { projectId, style = "professional" } = req.body;
-
-  if (!projectId) {
-    return res.status(400).json({ error: "projectId is required" });
-  }
-
-  try {
-    const project = await getOwnedProject(projectId, req.user.userId);
-
-    if (!project) {
-      return res.status(404).json({ error: "Project not found" });
-    }
-
-    const prompt = await generateImagePrompt(project, style);
-
-    return res.json({ prompt });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

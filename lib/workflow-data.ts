@@ -1,4 +1,10 @@
 export type PlatformId = "linkedin" | "behance" | "dribbble" | "googlemybusiness";
+export type ChannelStatus =
+  | "Connected - publish capable"
+  | "Connected - sign-in only"
+  | "Needs reconnect"
+  | "Not connected"
+  | "Export only";
 
 export interface PlatformRecommendation {
   platform: PlatformId;
@@ -14,7 +20,10 @@ export interface PlatformRecommendation {
 export interface ChannelConnection {
   id: PlatformId;
   name: string;
-  status: "Connected" | "Needs reconnect" | "Not connected" | "Export mode";
+  status: ChannelStatus;
+  mode: "direct" | "guided-upload" | "export";
+  canPublishDirect: boolean;
+  linkedAccount?: string | null;
   description: string;
   permissions: string[];
   lastSync: string;
@@ -66,6 +75,8 @@ export const channelConnections: ChannelConnection[] = [
   {
     id: "linkedin",
     name: "LinkedIn",
+    mode: "direct",
+    canPublishDirect: false,
     status: "Not connected",
     description: "Primary authority channel for ROI-led project stories and discovery CTAs.",
     permissions: ["Sign In with LinkedIn", "Share on LinkedIn"],
@@ -81,7 +92,9 @@ export const channelConnections: ChannelConnection[] = [
   {
     id: "behance",
     name: "Behance",
-    status: "Export mode",
+    mode: "export",
+    canPublishDirect: false,
+    status: "Export only",
     description: "Process-rich case study destination with a guided manual export path for V1.",
     permissions: ["Structured export template", "Manual media checklist"],
     lastSync: "Export template refreshed today",
@@ -95,6 +108,8 @@ export const channelConnections: ChannelConnection[] = [
   {
     id: "dribbble",
     name: "Dribbble",
+    mode: "guided-upload",
+    canPublishDirect: false,
     status: "Not connected",
     description: "Visual-first teaser channel for polished hero shots and short captions.",
     permissions: ["Public profile", "Shot upload"],
@@ -109,7 +124,9 @@ export const channelConnections: ChannelConnection[] = [
   },
   {
     id: "googlemybusiness",
-    name: "Google My Business",
+    name: "Google Business",
+    mode: "direct",
+    canPublishDirect: false,
     status: "Not connected",
     description: "Local business visibility and customer engagement through Google listings.",
     permissions: ["Business profile access", "Post to Google"],
@@ -538,6 +555,35 @@ function normalizeList(value: unknown): string[] {
   }
 
   if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => {
+          if (typeof item === "string") {
+            return item;
+          }
+
+          if (item && typeof item === "object") {
+            const candidate =
+              "originalName" in item
+                ? (item as { originalName?: string }).originalName
+                : "path" in item
+                  ? (item as { path?: string }).path
+                  : "url" in item
+                    ? (item as { url?: string }).url
+                    : undefined;
+
+            return candidate || JSON.stringify(item);
+          }
+
+          return String(item);
+        });
+      }
+    } catch (_error) {
+      // fall back to comma splitting
+    }
+
     return value
       .split(",")
       .map((item) => item.trim())

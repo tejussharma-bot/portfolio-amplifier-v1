@@ -1,11 +1,18 @@
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const { cleanEnvValue, hasConfiguredCredentials } = require("../utils/config");
+const {
+  buildOAuthRedirectUri,
+  getConfiguredPublicAppOrigin
+} = require("../utils/url-helpers");
 
 function configurePassport() {
   const googleClientId = cleanEnvValue(process.env.GOOGLE_CLIENT_ID);
   const googleClientSecret = cleanEnvValue(process.env.GOOGLE_CLIENT_SECRET);
-  const googleCallbackUrl = cleanEnvValue(process.env.GOOGLE_CALLBACK_URL);
+  const googleCallbackUrl =
+    cleanEnvValue(process.env.GOOGLE_REDIRECT_URI) ||
+    cleanEnvValue(process.env.GOOGLE_CALLBACK_URL) ||
+    new URL("/api/auth/google/callback", getConfiguredPublicAppOrigin()).toString();
 
   if (
     !hasConfiguredCredentials(
@@ -25,7 +32,7 @@ function configurePassport() {
       {
         clientID: googleClientId,
         clientSecret: googleClientSecret,
-        callbackURL: googleCallbackUrl || "http://localhost:3000/api/auth/google/callback"
+        callbackURL: googleCallbackUrl
       },
       async (_, __, profile, done) => {
         done(null, {

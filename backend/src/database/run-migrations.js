@@ -55,6 +55,13 @@ async function runMigrations(client) {
     );
   `);
 
+  try {
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences(user_id)`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_settings_user_id ON workspace_settings(user_id)`);
+  } catch (error) {
+    // Index might already exist, continue
+  }
+
   // Projects table
   await client.query(`
     CREATE TABLE IF NOT EXISTS projects (
@@ -159,6 +166,9 @@ async function runMigrations(client) {
 
   // Create indexes
   try {
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolios_project_id ON portfolios(project_id)`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolios_public_slug ON portfolios(public_slug)`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_channels_user_platform ON user_channels(user_id, platform)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_generated_content_project_id ON generated_content(project_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_reviews_user_id ON reviews(user_id)`);
@@ -172,6 +182,7 @@ async function runMigrations(client) {
     await client.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS linkedin_id VARCHAR(255)
     `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_linkedin_id ON users(linkedin_id)`);
   } catch (error) {
     // Column might already exist
   }
@@ -181,7 +192,9 @@ async function runMigrations(client) {
       ALTER TABLE generated_content
       ADD COLUMN IF NOT EXISTS external_post_id TEXT,
       ADD COLUMN IF NOT EXISTS export_payload TEXT,
-      ADD COLUMN IF NOT EXISTS exported_at TIMESTAMP
+      ADD COLUMN IF NOT EXISTS exported_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS portfolio_snapshot TEXT,
+      ADD COLUMN IF NOT EXISTS source_portfolio_updated_at TIMESTAMP
     `);
   } catch (error) {
     // Columns might already exist
@@ -198,6 +211,15 @@ async function runMigrations(client) {
     `);
   } catch (error) {
     // Columns might already exist
+  }
+
+  try {
+    await client.query(`
+      ALTER TABLE user_channels
+      ADD COLUMN IF NOT EXISTS last_validated_at TIMESTAMP
+    `);
+  } catch (error) {
+    // Column might already exist
   }
 }
 

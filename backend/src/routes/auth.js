@@ -11,13 +11,17 @@ const {
   getAuthProviderStatus,
   hasConfiguredCredentials
 } = require("../utils/config");
+const {
+  buildFrontendTokenRedirect,
+  buildOAuthRedirectUri,
+  getPublicAppOrigin
+} = require("../utils/url-helpers");
 
 const router = express.Router();
 
-// Rate limiting for login attempts
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per window
+  windowMs: 15 * 60 * 1000,
+  max: 5,
   message: {
     error: "Too many login attempts. Please try again in 15 minutes."
   },
@@ -51,40 +55,6 @@ function decodeState(value) {
   }
 }
 
-function getRequestOrigin(req) {
-  const forwardedProto = req.headers["x-forwarded-proto"];
-  const forwardedHost = req.headers["x-forwarded-host"];
-  const host = forwardedHost || req.headers.host;
-
-  // Allowed hosts for security
-  const allowedHosts = (process.env.ALLOWED_HOSTS || "localhost:3000,localhost:3001,portfolio-amplifier-v1.vercel.app")
-    .split(",")
-    .map(h => h.trim().toLowerCase());
-
-  if (host) {
-    const hostLower = host.toLowerCase();
-    const isAllowed = allowedHosts.some(allowed => 
-      hostLower === allowed || hostLower.endsWith('.' + allowed)
-    );
-
-    if (!isAllowed) {
-      throw new Error(`Host ${host} is not allowed`);
-    }
-
-    const proto = forwardedProto || (process.env.VERCEL ? "https" : req.protocol || "http");
-    return `${proto}://${host}`;
-  }
-
-  return cleanEnvValue(process.env.FRONTEND_URL) || "http://localhost:3001";
-}
-
-function buildFrontendRedirect(req, pathname, token) {
-  const redirectUrl = new URL(pathname || "/dashboard", getRequestOrigin(req));
-
-  redirectUrl.searchParams.set("token", token);
-  return redirectUrl.toString();
-}
-
 async function ensureUserScaffold(client, userId) {
   await client.query(
     `INSERT INTO workspace_settings (user_id)
@@ -99,6 +69,25 @@ async function ensureUserScaffold(client, userId) {
      ON CONFLICT (user_id) DO NOTHING`,
     [userId]
   );
+}
+
+async function fetchLinkedInOidcProfile(accessToken) {
+  const profileResponse = await axios.get("https://api.linkedin.com/v2/userinfo", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  const profile = profileResponse.data || {};
+
+  return {
+    id: String(profile.sub || profile.id || ""),
+    email: profile.email || null,
+    fullName:
+      profile.name ||
+      [profile.given_name, profile.family_name].filter(Boolean).join(" ") ||
+      null
+  };
 }
 
 router.get("/providers", (_req, res) => {
@@ -253,7 +242,7 @@ router.get("/google/callback", (req, res, next) => {
         const user = userResult.rows[0];
         const redirectState = decodeState(req.query.state);
         const redirectTo = redirectState.redirectTo || "/dashboard";
-        return res.redirect(buildFrontendRedirect(req, redirectTo, signToken(user)));
+        return res.redirect(buildFrontendTokenRedirect(req, redirectTo, signToken(user)));
       } catch (dbError) {
         if (client) {
           await client.query("ROLLBACK");
@@ -269,7 +258,11 @@ router.get("/google/callback", (req, res, next) => {
 router.get("/linkedin", (req, res) => {
   const clientId = cleanEnvValue(process.env.LINKEDIN_CLIENT_ID);
   const clientSecret = cleanEnvValue(process.env.LINKEDIN_CLIENT_SECRET);
-  const redirectUri = cleanEnvValue(process.env.LINKEDIN_AUTH_REDIRECT_URI);
+  const redirectUri = buildOAuthRedirectUri(
+    req,
+    "/api/auth/linkedin/callback",
+    ["LINKEDIN_AUTH_REDIRECT_URI", "LINKEDIN_REDIRECT_URI"]
+  );
 
   if (
     !hasConfiguredCredentials(
@@ -290,7 +283,7 @@ router.get("/linkedin", (req, res) => {
     response_type: "code",
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: "openid profile email r_liteprofile r_emailaddress",
+    scope: "openid profile email",
     state
   });
 
@@ -301,7 +294,11 @@ router.get("/linkedin", (req, res) => {
 
 router.get("/linkedin/callback", async (req, res) => {
   const { code, state, error, error_description } = req.query;
-  const redirectUri = cleanEnvValue(process.env.LINKEDIN_AUTH_REDIRECT_URI);
+  const redirectUri = buildOAuthRedirectUri(
+    req,
+    "/api/auth/linkedin/callback",
+    ["LINKEDIN_AUTH_REDIRECT_URI", "LINKEDIN_REDIRECT_URI"]
+  );
   const clientId = cleanEnvValue(process.env.LINKEDIN_CLIENT_ID);
   const clientSecret = cleanEnvValue(process.env.LINKEDIN_CLIENT_SECRET);
 
@@ -350,12 +347,7 @@ router.get("/linkedin/callback", async (req, res) => {
 
     let linkedinProfile;
     try {
-      const profileResponse = await axios.get("https://api.linkedin.com/v2/me", {
-        headers: {
-          Authorization: `Bearer ${tokenResponse.data.access_token}`
-        }
-      });
-      linkedinProfile = profileResponse.data;
+      linkedinProfile = await fetchLinkedInOidcProfile(tokenResponse.data.access_token);
     } catch (axiosError) {
       console.error("LinkedIn profile fetch failed:", axiosError.response?.data || axiosError.message);
       return res.status(400).json({
@@ -364,33 +356,11 @@ router.get("/linkedin/callback", async (req, res) => {
       });
     }
 
-    let email = null;
-    try {
-      const emailResponse = await axios.get(
-        "https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))",
-        {
-          headers: {
-            Authorization: `Bearer ${tokenResponse.data.access_token}`
-          }
-        }
-      );
-      email =
-        emailResponse.data?.elements?.[0]?.["handle~"]?.emailAddress ||
-        null;
-    } catch (emailError) {
-      // Email may not be available for all LinkedIn accounts.
-      email = null;
-    }
-
     if (!linkedinProfile?.id) {
       return res.status(500).send("LinkedIn authentication failed");
     }
-
-    const fullName =
-      [linkedinProfile.localizedFirstName, linkedinProfile.localizedLastName]
-        .filter(Boolean)
-        .join(" ") ||
-      null;
+    const email = linkedinProfile.email || null;
+    const fullName = linkedinProfile.fullName || null;
 
     await client.query("BEGIN");
 
@@ -424,9 +394,10 @@ router.get("/linkedin/callback", async (req, res) => {
             ? new Date(Date.now() + Number(tokenResponse.data.expires_in) * 1000)
             : null,
           JSON.stringify({
-            scope: "openid profile email w_member_social r_liteprofile r_emailaddress",
+            scope: "openid profile email w_member_social",
             connectionMode: "post-enabled",
             canPublish: true,
+            authorUrn: `urn:li:person:${linkedinProfile.id}`,
             profile: {
               id: linkedinProfile.id,
               name: fullName,
@@ -440,7 +411,7 @@ router.get("/linkedin/callback", async (req, res) => {
 
       const channelRedirect = new URL(
         redirectState.returnTo || "/dashboard/channels",
-        getRequestOrigin(req)
+        getPublicAppOrigin(req)
       );
       channelRedirect.searchParams.set("oauth", "success");
       channelRedirect.searchParams.set("platform", "linkedin");
@@ -482,7 +453,7 @@ router.get("/linkedin/callback", async (req, res) => {
 
     const user = userResult.rows[0];
     return res.redirect(
-      buildFrontendRedirect(req, redirectState.redirectTo || "/dashboard", signToken(user))
+      buildFrontendTokenRedirect(req, redirectState.redirectTo || "/dashboard", signToken(user))
     );
   } catch (authError) {
     if (client) {
